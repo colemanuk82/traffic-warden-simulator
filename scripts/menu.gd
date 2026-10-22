@@ -12,6 +12,7 @@ const Hud := preload("res://scripts/hud.gd")
 const Career := preload("res://scripts/career.gd")
 const WeatherInfo := preload("res://scripts/weather.gd")
 const SettingsPanel := preload("res://scripts/settings_panel.gd")
+const PAYPAL_URL := "https://paypal.me/colemanuk82"
 const NameEntry := preload("res://scripts/name_entry.gd")
 
 const YELLOW := Color(1.0, 0.86, 0.15)
@@ -305,7 +306,7 @@ func _build_main() -> Control:
 	_button("Unlockables", you, func() -> void: _show("unlocks"), w)
 	_button("High Scores", you, func() -> void: _show("records"), w)
 	var extra := _menu_column(cols, "EXTRAS", Color(0.55, 0.8, 1.0))
-	_button("Settings", extra, func() -> void: _show("settings"), w)
+	var settings_btn := _button("Settings", extra, func() -> void: _show("settings"), w)
 	_button("Controls", extra, func() -> void: _show("controls"), w)
 	_button("Jukebox", extra, func() -> void: _show("jukebox"), w)
 	_button("Change Name", extra, func() -> void: _ask_profile(1, "main"), w)
@@ -317,9 +318,28 @@ func _build_main() -> Control:
 				b.custom_minimum_size.y = 46
 				b.add_theme_font_size_override("font_size", 23)
 
+	# Support button, top right. Up from the Extras column reaches it on a controller
+	var support := _button("Support me on PayPal", root, func() -> void: OS.shell_open(PAYPAL_URL), 350)
+	support.position = Vector2(892, 22)
+	support.custom_minimum_size.y = 46
+	support.add_theme_font_size_override("font_size", 22)
+	support.add_theme_color_override("font_color", Color.WHITE)
+	support.add_theme_color_override("font_hover_color", Color.WHITE)
+	support.add_theme_color_override("font_focus_color", Color.WHITE)
+	for state in ["normal", "hover", "focus", "pressed"]:
+		var pb := StyleBoxFlat.new()
+		pb.bg_color = Color(0.0, 0.19, 0.53) if state == "normal" else Color(0.0, 0.44, 0.73)
+		pb.border_color = YELLOW if state in ["focus", "hover"] else Color(0.0, 0.6, 0.87)
+		pb.set_border_width_all(4)
+		pb.set_corner_radius_all(12)
+		support.add_theme_stylebox_override(state, pb)
+	support.focus_neighbor_bottom = support.get_path_to(settings_btn)
+	support.focus_neighbor_left = support.get_path_to(settings_btn)
+	settings_btn.focus_neighbor_top = settings_btn.get_path_to(support)
+
 	# The warden's ID card, top right
 	var card := PanelContainer.new()
-	card.position = Vector2(892, 34)
+	card.position = Vector2(892, 84)
 	card.custom_minimum_size = Vector2(350, 196)
 	root.add_child(card)
 	var cv := VBoxContainer.new()

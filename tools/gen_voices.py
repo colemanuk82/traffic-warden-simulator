@@ -185,6 +185,9 @@ def main():
         for key, line in ga.PUNCHED_LINES.items():
             say("punched_" + key, line, MEN[len(key) % len(MEN)])
             say("punched_%s_2" % key, line, WOMEN[len(key) % len(WOMEN)])
+    if want("excuses"):
+        for i, (key, line) in enumerate(gx.EXCUSE_LINES.items()):
+            four_takes("driver_x_" + key, line, i + 1)
     if want("warden"):
         for key, line in ga.WARDEN_LINES.items():
             say("warden_" + key, line, WARDEN)

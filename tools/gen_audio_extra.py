@@ -313,6 +313,33 @@ FAMILY_HECKLES = [
     "Off you pop, slowcoach!", "You're a chicken man!",
 ]
 NEW_DRIVER_LINES = {"bike": "Hey, that's my bike!", "chicken": "You're a chicken man!"}
+# Excuses drivers shout when they come back to a ticketed car (voiced by tools/gen_voices.py)
+EXCUSE_LINES = {
+    "aminute": "I was only a minute!",
+    "phone": "My phone didn't work, so I couldn't pay!",
+    "space": "I couldn't find a space!",
+    "wherelike": "I park where I like, mate!",
+    "cashpoint": "I was only popping to the cash machine!",
+    "coins": "The machine only takes coins!",
+    "app": "The parking app crashed!",
+    "signs": "There weren't any signs!",
+    "yellow": "I didn't see any yellow lines!",
+    "droppingoff": "I was only dropping something off!",
+    "hazards": "My hazards were on!",
+    "straightback": "I was coming straight back!",
+    "everyone": "Everyone else parks here!",
+    "years": "I've parked here for twenty years!",
+    "loo": "I was desperate for the loo!",
+    "sandwich": "I was only buying a sandwich!",
+    "notmine": "It's not even my car!",
+    "appeal": "I'm appealing that!",
+    "birthday": "Have a heart, it's my birthday!",
+    "whoami": "Do you know who I am?!",
+    "roadtax": "I pay my road tax, you know!",
+    "nan": "I was helping my nan with her shopping!",
+    "lost": "I got lost looking for the car park!",
+    "change": "I was just getting change!",
+}
 
 
 def voices():
