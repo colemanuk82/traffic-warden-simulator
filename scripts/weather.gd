@@ -43,7 +43,7 @@ func setup(weather: String, the_world, follow: Node3D) -> void:
 			_snow(3000, 7.0)
 			_fog(Color(0.85, 0.88, 0.95), 0.02)
 		"fog":
-			_fog(Color(0.75, 0.77, 0.8), 0.016)
+			_fog(main.level.get("fog_color", Color(0.75, 0.77, 0.8)), 0.016)
 			sun.light_energy *= 0.7
 		"wind":
 			_leaves()
@@ -117,9 +117,13 @@ func _strike_point() -> Vector3:
 	## Usually near a warden, to keep you on your toes
 	if target and randf() < 0.55:
 		var off := Vector3(randf_range(-1.0, 1.0), 0, randf_range(-1.0, 1.0)).normalized() * randf_range(2.5, 8.0)
-		return world.clamp_move(target.global_position, target.global_position + off)
+		var sp: Vector3 = world.clamp_move(target.global_position, target.global_position + off)
+		sp.y = world.height_at(sp)
+		return sp
 	var r: Rect2 = world.walk_rects[randi() % world.walk_rects.size()]
-	return Vector3(randf_range(r.position.x, r.end.x), 0, randf_range(r.position.y, r.end.y))
+	var p := Vector3(randf_range(r.position.x, r.end.x), 0, randf_range(r.position.y, r.end.y))
+	p.y = world.height_at(p)
+	return p
 
 
 func _bolt(spot: Vector3) -> Node3D:
@@ -277,6 +281,7 @@ func _puddles() -> void:
 	for i in 40:
 		var r: Rect2 = world.walk_rects[randi() % world.walk_rects.size()]
 		var p := Vector3(randf_range(r.position.x, r.end.x), 0.08, randf_range(r.position.y, r.end.y))
+		p.y += world.height_at(p)
 		var puddle := Util.cylinder(randf_range(0.6, 1.4), 0.02, water, p)
 		puddle.scale.z = randf_range(0.5, 1.0)
 		world.add_child(puddle)

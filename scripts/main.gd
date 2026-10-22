@@ -78,6 +78,7 @@ class Player extends RefCounted:
 	var gadget_i := 0
 	var uses := {}
 	var shake := 0.0
+	var sweets := 0  # Halloween: one sweet per trick-or-treater gets you a treat
 
 
 var rng := RandomNumberGenerator.new()
@@ -131,6 +132,12 @@ var pickups: Array = []
 var collectibles: Array = []  # [node, index]
 var camera_vans: Array = []
 var ped_target := 2
+
+# Christmas Eve: Santa's sleigh flies over and drops presents
+var sleigh_timer := 18.0
+var flyover: Node3D = null
+var fly_dir := Vector3.RIGHT
+var fly_drop := 0.0
 
 # Endless mode
 var wave := 1
@@ -211,9 +218,10 @@ func _ready() -> void:
 	_plan_boss()
 	if mode in ["career", "endless"] and not level.has("event"):
 		_spawn_collectibles()
-	ped_target = {"city": 4, "town": 3}.get(level.theme, 2) + (1 if level.has("event") else 0) + (1 if two else 0)
+	ped_target = int(level.get("ped_count", {"city": 4, "town": 3}.get(level.theme, 2))) + (1 if level.has("event") else 0) + (1 if two else 0)
 	for i in ped_target:
 		_spawn_pedestrian()
+	preload("res://scripts/dogwalker.gd").spawn_some(self, 1 if level.theme in ["carpark", "multistorey", "city"] else 3)
 	street_timer = rng.randf_range(25.0, 40.0)
 
 	Audio.play_music(_music())
@@ -281,6 +289,7 @@ func _add_player(i: int, two: bool) -> void:
 	cam.position = w.position + _cam_offset()
 	p.camera = cam
 	p.green_size = GREEN_SIZE + 0.03 * Game.upgrade_level("book")
+	p.sweets = int(level.get("sweets", 0))
 	for g in Career.GADGETS:
 		var n := Game.gadget_uses(g.id)
 		if n > 0:
@@ -290,7 +299,8 @@ func _add_player(i: int, two: bool) -> void:
 
 
 func _cam_offset() -> Vector3:
-	return CAMERA_OFFSET_SPLIT if players.size() > 1 or mode in ["coop", "race"] else CAMERA_OFFSET
+	var base := CAMERA_OFFSET_SPLIT if players.size() > 1 or mode in ["coop", "race"] else CAMERA_OFFSET
+	return base * Game.camera_zoom()
 
 
 # ---------------------------------------------------------------- helpers used by cars, drivers and pedestrians
@@ -372,8 +382,10 @@ func _spawn_passer(heckler: bool, kind := "") -> void:
 	car.lane = world.lanes[rng.randi() % world.lanes.size()]
 	car.heckler = heckler
 	car.kind = kind
-	if level.has("heckle_lines"):
+	# Themed levels mix their own voiced heckles in with the usual ones
+	if level.has("heckle_lines") and rng.randf() < 0.65:
 		car.heckle_lines = level.heckle_lines
+		car.heckle_voice = level.get("heckle_voice", "heckle")
 	if weather_kind in ["rain", "storm"] and rng.randf() < 0.6:
 		car.splasher = true
 	# Don't pop out on top of another car at the lane start
@@ -422,6 +434,7 @@ func _spawn_driver(car, target) -> void:
 	if car.boss.get("id", "") == "vanman":
 		d.hp = 2
 		d.chase_speed = 6.3
+	d.santa = car.kind == "sleigh"
 	add_child(d)
 	var along: Vector3 = car.spot.dir * rng.randf_range(9.0, 13.0) * (1.0 if rng.randf() < 0.5 else -1.0)
 	var p: Vector3 = car.spot.pos + car.spot.normal * 4.4 + along
@@ -429,8 +442,15 @@ func _spawn_driver(car, target) -> void:
 		p = car.spot.pos + car.spot.normal * 4.4
 	d.global_position = p
 	car.waiting_for_driver = true
-	_popup("Oi! That's MY car!", Color(1, 0.35, 0.3), d.global_position, 30)
-	Audio.voice("driver_oi", d.pitch)
+	if d.santa:
+		_popup("HO HO HO-HOLD ON!", Color(1, 0.35, 0.3), d.global_position, 30)
+		Audio.voice("santa_hohoho", d.pitch)
+	elif car.kind == "motorbike":
+		_popup("Hey, that's my BIKE!", Color(1, 0.35, 0.3), d.global_position, 30)
+		Audio.voice("driver_bike", d.pitch)
+	else:
+		_popup("Oi! That's MY car!", Color(1, 0.35, 0.3), d.global_position, 30)
+		Audio.voice("driver_oi", d.pitch)
 
 
 func _spawn_bodyguards(car) -> void:
@@ -450,7 +470,8 @@ func _spawn_bodyguards(car) -> void:
 func _spawn_pedestrian() -> void:
 	var p = PedestrianScript.new()
 	p.main = self
-	p.kind = ["drunk", "geezer", "stag"][rng.randi() % 3]
+	var kinds: Array = level.get("peds", ["drunk", "geezer", "stag"])
+	p.kind = kinds[rng.randi() % kinds.size()]
 	var pos: Vector3 = world.random_walk_point(rng, warden.global_position if warden else Vector3.ZERO, 14.0, true)
 	p.position = pos
 	add_child(p)
@@ -511,6 +532,7 @@ func _process(delta: float) -> void:
 		_spawn_pedestrian()
 
 	_update_boss(delta)
+	_update_flyover(delta)
 	_update_street(delta)
 	_update_pickups(delta)
 	_update_collectibles(delta)
@@ -532,6 +554,7 @@ func _update_hud() -> void:
 			"gadget": p.gadgets[p.gadget_i] if not p.gadgets.is_empty() else "",
 			"uses": int(p.uses.get(p.gadgets[p.gadget_i], 0)) if not p.gadgets.is_empty() else 0,
 			"boost": p.warden.boost_timer, "soaked": p.warden.soak_timer > 0.0,
+			"sweets": p.sweets if level.has("sweets") else -1,
 		})
 	if not boss.is_empty() and is_instance_valid(boss_car):
 		hud.set_boss(boss.name, int(boss_car.boss.hp), int(boss.hp))
@@ -1112,34 +1135,62 @@ func _update_pickups(delta: float) -> void:
 		pk.left -= delta
 		var n: Node3D = pk.node
 		n.rotation.y += delta * 2.0
-		n.position.y = 0.6 + sin(elapsed * 3.0 + pk.phase) * 0.15
+		n.position.y = world.height_at(n.position) + 0.6 + sin(elapsed * 3.0 + pk.phase) * 0.15
 		if pk.left <= 0.0:
 			pickups.erase(pk)
 			n.queue_free()
 			continue
 		for w in all_wardens():
-			if w.global_position.distance_to(Vector3(n.position.x, 0, n.position.z)) < 1.3:
+			if w.global_position.distance_to(Vector3(n.position.x, w.global_position.y, n.position.z)) < 1.3:
 				pickups.erase(pk)
 				n.queue_free()
 				shift.pickups += 1
-				if pk.kind == "coffee":
-					w.boost(1.3, 9.0, false)
-					_popup("COFFEE! Speed up!", Color(0.9, 0.7, 0.45), w.global_position + Vector3(0, 2.6, 0), 34)
-				else:
-					w.boost(1.5, 6.0, true)
-					_popup("ENERGY DRINK! ZOOM!", Color(0.4, 1, 0.4), w.global_position + Vector3(0, 2.6, 0), 36)
-				Audio.sfx("slurp")
 				player_of(w).score += 10
+				match pk.kind:
+					"coffee":
+						w.boost(1.3, 9.0, false)
+						_popup("COFFEE! Speed up!", Color(0.9, 0.7, 0.45), w.global_position + Vector3(0, 2.6, 0), 34)
+						Audio.sfx("slurp")
+					"energy":
+						w.boost(1.5, 6.0, true)
+						_popup("ENERGY DRINK! ZOOM!", Color(0.4, 1, 0.4), w.global_position + Vector3(0, 2.6, 0), 36)
+						Audio.sfx("slurp")
+					"sweets":
+						player_of(w).sweets += 3
+						_popup("BUCKET OF SWEETS!  +3", Color(1, 0.6, 0.15), w.global_position + Vector3(0, 2.6, 0), 36)
+						Audio.sfx("rattle", 1.3)
+					"present":
+						_open_present(w)
 				break
 
 
 func _spawn_pickup() -> void:
 	var kind := "coffee" if rng.randf() < 0.6 else "energy"
+	if level.has("sweets") and rng.randf() < 0.55:
+		kind = "sweets"
 	var pos: Vector3 = world.random_walk_point(rng, warden.global_position, 8.0, true)
+	_add_pickup(kind, pos)
+
+
+func _add_pickup(kind: String, pos: Vector3) -> void:
 	var n := Node3D.new()
 	n.position = pos + Vector3(0, 0.6, 0)
 	add_child(n)
-	if kind == "coffee":
+	if kind == "sweets":
+		# A pumpkin bucket full of sweets
+		n.add_child(Util.sphere(0.4, Util.mat(Color(1, 0.5, 0.05), true), Vector3(0, 0, 0)))
+		n.add_child(Util.box(Vector3(0.3, 0.06, 0.05), Util.glow(Color(1, 0.9, 0.2), 2.0), Vector3(0, 0.05, 0.38)))
+		n.add_child(Util.torus(0.3, 0.34, Util.mat(Color(0.1, 0.1, 0.1)), Vector3(0, 0.4, 0)))
+		for i in 4:
+			n.add_child(Util.sphere(0.1, Color.from_hsv(i * 0.25, 0.8, 1.0), Vector3(-0.15 + i * 0.1, 0.35, 0.05 * (i % 2))))
+		n.add_child(Util.label3d("SWEETS", 26, Color(1, 0.6, 0.15), Vector3(0, 0.85, 0)))
+	elif kind == "present":
+		var c: Color = [Color(0.9, 0.15, 0.15), Color(0.15, 0.6, 0.25), Color(0.2, 0.4, 0.95)][rng.randi() % 3]
+		n.add_child(Util.box(Vector3(0.7, 0.6, 0.7), Util.mat(c, true), Vector3.ZERO))
+		n.add_child(Util.box(Vector3(0.72, 0.62, 0.14), Util.mat(Color(1, 0.85, 0.2)), Vector3.ZERO))
+		n.add_child(Util.box(Vector3(0.14, 0.62, 0.72), Util.mat(Color(1, 0.85, 0.2)), Vector3.ZERO))
+		n.add_child(Util.torus(0.08, 0.16, Util.mat(Color(1, 0.85, 0.2)), Vector3(0, 0.38, 0)))
+	elif kind == "coffee":
 		n.add_child(Util.cylinder(0.22, 0.5, Util.mat(Color.WHITE, true), Vector3.ZERO, false, 0.28))
 		n.add_child(Util.cylinder(0.3, 0.08, Util.mat(Color(0.35, 0.2, 0.1)), Vector3(0, 0.28, 0)))
 		n.add_child(Util.cylinder(0.25, 0.15, Util.mat(Color(0.75, 0.55, 0.35)), Vector3(0, 0, 0)))
@@ -1150,6 +1201,169 @@ func _spawn_pickup() -> void:
 		n.add_child(Util.label3d("ZAP", 28, Color(0.4, 1, 0.4), Vector3(0, 0.7, 0)))
 	n.add_child(Util.torus(0.45, 0.55, Util.glow(Color(1, 1, 0.6), 1.5), Vector3(0, -0.55, 0)))
 	pickups.append({"node": n, "kind": kind, "left": 25.0, "phase": rng.randf() * TAU})
+
+
+func _open_present(w) -> void:
+	var p := player_of(w)
+	var pos: Vector3 = w.global_position + Vector3(0, 2.6, 0)
+	var roll := rng.randf()
+	if roll < 0.15:
+		p.score -= 20
+		_popup("LUMP OF COAL! NAUGHTY LIST  -20", Color(0.6, 0.6, 0.65), pos, 34)
+		Audio.sfx("wrong", 0.8, 0.6)
+	elif roll < 0.5:
+		w.boost(1.4, 8.0, true)
+		_popup("NEW TRAINERS! ZOOM!", Color(0.4, 1, 0.5), pos, 36)
+		Audio.sfx("chimes")
+	else:
+		p.score += 150
+		_popup("PRESENT!  +150", Color(1, 0.4, 0.4), pos, 40)
+		Audio.sfx("chimes")
+
+
+# ---------------------------------------------------------------- Halloween: trick or treat
+
+## A trick-or-treater reached the warden. A sweet buys a treat; no sweets means a trick.
+func on_trick_or_treat(kid, w) -> void:
+	var p := player_of(w)
+	var pos: Vector3 = w.global_position + Vector3(0, 2.6, 0)
+	if p.sweets > 0:
+		p.sweets -= 1
+		kid.got_sweet(true)
+		var roll := rng.randf()
+		if roll < 0.1:
+			p.score += 250
+			_popup("TREAT: GOLDEN TOFFEE!  +250", Color(1, 0.85, 0.2), pos, 40)
+			Audio.sting("unlock")
+		elif roll < 0.4:
+			p.score += 100
+			_popup("TREAT: CHOCOLATE BAR!  +100", Color(1, 0.6, 0.2), pos, 36)
+			Audio.sfx("chimes")
+		elif roll < 0.7:
+			w.boost(1.35, 8.0, false)
+			_popup("TREAT: TOFFEE APPLE! Speed up!", Color(1, 0.4, 0.3), pos, 34)
+			Audio.sfx("slurp")
+		elif mode in ["career", "event", "coop"]:
+			time_left += 8.0
+			_popup("TREAT: +8 SECONDS ON THE CLOCK!", Color(0.5, 1, 0.8), pos, 34)
+			Audio.sfx("ding", 1.2)
+		else:
+			w.boost(1.5, 5.0, true)
+			_popup("TREAT: FIZZY SWEETS! ZOOM!", Color(0.4, 1, 0.4), pos, 34)
+			Audio.sfx("slurp")
+		return
+	kid.got_sweet(false)
+	if p.writing:
+		_cancel_write(p, "")
+	match rng.randi() % 4:
+		0:
+			p.score -= 30
+			w.soak(3.0)
+			_splash_fx(w.global_position + Vector3(0, 1.4, 0), Color(1, 0.9, 0.5, 0.95))
+			_popup("TRICK: EGGED!  -30", Color(1, 0.9, 0.5), pos, 44)
+			Audio.sfx("splash", 1.4)
+		1:
+			w.stun(2.0)
+			_mummy_wrap(w, 2.0)
+			_popup("TRICK: TOILET PAPERED!", Color(0.95, 0.95, 1), pos, 40)
+			Audio.sfx("whoosh")
+		2:
+			w.stun(1.5)
+			_popup("TRICK: LACES TIED TOGETHER!", Color(1, 0.6, 0.3), pos, 38)
+			Audio.sfx("thud")
+		_:
+			p.score -= 50
+			w.stun(1.0)
+			_shake(p, 0.6)
+			_popup("TRICK: BOO! JUMP SCARE  -50", Color(0.7, 1, 0.5), pos, 40)
+			Audio.sfx("boing", 0.7)
+
+
+func _mummy_wrap(w, seconds: float) -> void:
+	var wrap := Node3D.new()
+	w.add_child(wrap)
+	for i in 6:
+		var band := Util.torus(0.36, 0.5, Util.mat(Color(0.97, 0.97, 0.95), true), Vector3(0, 0.35 + i * 0.28, 0))
+		band.rotation.z = 0.25 if i % 2 else -0.25
+		wrap.add_child(band)
+	get_tree().create_timer(seconds).timeout.connect(wrap.queue_free)
+
+
+# ---------------------------------------------------------------- Christmas Eve: Santa's sleigh fly-over
+
+func _update_flyover(delta: float) -> void:
+	if not level.get("flyover", false):
+		return
+	if flyover == null:
+		sleigh_timer -= delta
+		if sleigh_timer <= 0.0:
+			_start_flyover()
+		return
+	flyover.position += fly_dir * 15.0 * delta
+	flyover.position.y = 7.0 + sin(elapsed * 2.0) * 0.5
+	fly_drop -= delta
+	var below := Vector3(flyover.position.x, 0, flyover.position.z)
+	if fly_drop <= 0.0 and world.bounds.grow(-4.0).has_point(Vector2(below.x, below.z)):
+		fly_drop = rng.randf_range(1.2, 2.2)
+		_drop_present(world.random_walk_point(rng, below, 0.0, true) if not world.is_walkable(below) else below)
+	if absf(flyover.position.x - focus.global_position.x) > 90.0:
+		flyover.queue_free()
+		flyover = null
+		sleigh_timer = rng.randf_range(26.0, 38.0)
+
+
+func _start_flyover() -> void:
+	fly_dir = Vector3.RIGHT if rng.randf() < 0.5 else Vector3.LEFT
+	var start: Vector3 = focus.global_position - fly_dir * 60.0
+	start.z = focus.global_position.z + rng.randf_range(2.0, 5.0)
+	flyover = Node3D.new()
+	add_child(flyover)
+	flyover.position = start + Vector3(0, 7, 0)
+	flyover.rotation.y = 0.0 if fly_dir.x > 0.0 else PI
+	fly_drop = 1.0
+	var red := Util.mat(Color(0.85, 0.1, 0.1), true)
+	var gold := Util.mat(Color(0.95, 0.8, 0.2))
+	flyover.add_child(Util.box(Vector3(2.6, 0.9, 1.5), red, Vector3(0, 0.6, 0)))
+	flyover.add_child(Util.box(Vector3(0.6, 1.2, 1.5), red, Vector3(-1.1, 1.1, 0)))
+	for z in [-0.75, 0.75]:
+		flyover.add_child(Util.box(Vector3(3.4, 0.08, 0.1), gold, Vector3(0.3, 0.05, z)))
+	flyover.add_child(Util.sphere(0.6, Util.mat(Color(0.5, 0.3, 0.15), true), Vector3(-0.8, 1.6, 0)))
+	# Santa
+	flyover.add_child(Util.capsule(0.45, 1.0, red, Vector3(0.3, 1.4, 0)))
+	flyover.add_child(Util.sphere(0.32, Util.mat(Color(1, 0.8, 0.7), true), Vector3(0.35, 2.15, 0)))
+	flyover.add_child(Util.sphere(0.3, Util.mat(Color.WHITE, true), Vector3(0.5, 1.95, 0)))
+	var hat := Util.cylinder(0.3, 0.55, red, Vector3(0.3, 2.55, 0), true, 0.02)
+	flyover.add_child(hat)
+	flyover.add_child(Util.sphere(0.12, Util.mat(Color.WHITE), Vector3(0.3, 2.85, 0)))
+	for i in 4:
+		var deer := Node3D.new()
+		deer.position = Vector3(2.6 + (i / 2) * 1.8, 0.4, -0.5 + (i % 2) * 1.0)
+		flyover.add_child(deer)
+		var body := Util.capsule(0.25, 1.0, Util.mat(Color(0.55, 0.35, 0.2), true), Vector3(0, 0.5, 0))
+		body.rotation.z = PI / 2
+		deer.add_child(body)
+		deer.add_child(Util.sphere(0.2, Util.mat(Color(0.55, 0.35, 0.2), true), Vector3(0.55, 0.85, 0)))
+		deer.add_child(Util.sphere(0.08, Util.glow(Color(1, 0.1, 0.1), 3.0) if i >= 2 else Util.mat(Color(0.1, 0.1, 0.1)), Vector3(0.75, 0.85, 0)))
+		for x in [-0.3, 0.3]:
+			var antler := Util.cylinder(0.03, 0.4, Util.mat(Color(0.4, 0.28, 0.15)), Vector3(0.5 + x * 0.2, 1.15, 0))
+			antler.rotation.z = x
+			deer.add_child(antler)
+	var label := Util.label3d("HO HO HO!", 60, Color(1, 0.3, 0.3), Vector3(0, 3.6, 0))
+	flyover.add_child(label)
+	Audio.voice("santa_hohoho", 1.0, 1.0, false)
+	Audio.sfx("jingle")
+
+
+func _drop_present(pos: Vector3) -> void:
+	var box := Util.box(Vector3(0.6, 0.5, 0.6), Util.mat(Color(0.9, 0.15, 0.15), true), flyover.position)
+	add_child(box)
+	var tw := create_tween()
+	tw.tween_property(box, "position", pos + Vector3(0, 0.6, 0), 0.9).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func() -> void:
+		box.queue_free()
+		if state == "playing" and pickups.size() < 6:
+			_add_pickup("present", pos)
+			Audio.sfx("thud", 1.4, 0.6))
 
 
 func _spawn_collectibles() -> void:
@@ -1176,9 +1390,9 @@ func _update_collectibles(delta: float) -> void:
 	for c in collectibles.duplicate():
 		var n: Node3D = c.node
 		n.rotation.y += delta * 2.5
-		n.position.y = 0.9 + sin(elapsed * 2.0 + c.index) * 0.2
+		n.position.y = world.height_at(n.position) + 0.9 + sin(elapsed * 2.0 + c.index) * 0.2
 		for w in all_wardens():
-			if w.global_position.distance_to(Vector3(n.position.x, 0, n.position.z)) < 1.4:
+			if w.global_position.distance_to(Vector3(n.position.x, w.global_position.y, n.position.z)) < 1.4:
 				collectibles.erase(c)
 				n.queue_free()
 				var found: Array = Game.collectibles.get(level.id, []).duplicate()
@@ -1268,6 +1482,13 @@ func on_pestered(ped, w) -> void:
 			p.score -= 50
 			_popup("BOUGHT A DODGY WATCH  -50", Color(1, 0.5, 0.3), w.global_position + Vector3(0, 2.6, 0), 32)
 			Audio.sfx("cash")
+		"caroller":
+			w.stun(1.5)
+			_popup("FORCED TO SING ALONG!", Color(0.6, 1, 0.6), w.global_position + Vector3(0, 2.6, 0), 34)
+		"elf":
+			p.score -= 40
+			_popup("ELF PUT YOU ON THE NAUGHTY LIST  -40", Color(0.4, 1, 0.4), w.global_position + Vector3(0, 2.6, 0), 30)
+			Audio.sfx("chimes", 1.5)
 		_:
 			w.stun(1.0)
 			_popup("FORCED TO DANCE!", Color(1, 0.6, 0.9), w.global_position + Vector3(0, 2.6, 0), 34)
@@ -1322,7 +1543,7 @@ func on_splash(car, pos: Vector3) -> void:
 			Audio.voice("heckle_splash", rng.randf_range(0.95, 1.1))
 
 
-func _splash_fx(pos: Vector3) -> void:
+func _splash_fx(pos: Vector3, color := Color(0.6, 0.75, 1.0, 0.9)) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true
 	p.emitting = true
@@ -1335,7 +1556,7 @@ func _splash_fx(pos: Vector3) -> void:
 	p.mesh = mesh
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = Color(0.6, 0.75, 1.0, 0.9)
+	m.albedo_color = color
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	p.material_override = m
 	p.direction = Vector3(0, 1, 0)
@@ -1412,19 +1633,16 @@ func set_paused(paused: bool) -> void:
 
 
 func restart() -> void:
-	get_tree().paused = false
-	get_tree().reload_current_scene()
+	Game.reload_scene()
 
 
 func next_level() -> void:
-	get_tree().paused = false
 	Game.current_level = mini(Game.current_level + 1, Levels.count() - 1)
-	get_tree().reload_current_scene()
+	Game.reload_scene()
 
 
 func quit_to_menu() -> void:
-	get_tree().paused = false
-	get_tree().change_scene_to_file("res://menu.tscn")
+	Game.change_scene("res://menu.tscn")
 
 
 # ---------------------------------------------------------------- end of shift
@@ -1486,12 +1704,13 @@ func _end_shift() -> void:
 	Game.save_game()
 	var has_next: bool = mode == "career" and Game.current_level + 1 < Levels.count() and Game.level_unlocked(Game.current_level + 1)
 	var board_ok: bool = Game.board_qualifies(board_id, score) and mode != "race"
+	var board_place := submit_score(board_id, _board_name()) if board_ok else -1
 	var r := {
 		"mode": mode, "passed": passed, "stars": stars, "tickets": tickets, "quota": quota, "score": score,
 		"new_best": score > prev_best and prev_best > -999999, "perfects": _sum("perfects"), "best_combo": _best_combo(),
 		"close_calls": _sum("close_calls"), "punches": _sum("punches"), "heckles": heckles, "wrong": _sum("wrong"),
 		"hit": _sum("hit"), "unlocks": unlocks, "has_next": has_next, "wave": wave, "challenges": done, "pay": pay,
-		"board": board_id if board_ok else "", "quota_time": quota_time, "new_time": new_time,
+		"board": "", "board_place": board_place, "board_name": _board_name(), "quota_time": quota_time, "new_time": new_time,
 		"medal": Game.best_time_medal(level.id, float(level.time)) if mode in ["career", "event"] else 0,
 		"bosses": shift.bosses, "players": [],
 	}
@@ -1522,10 +1741,17 @@ func _best_combo() -> float:
 	return b
 
 
-## Called by the HUD once initials have been entered for a high score.
-func submit_score(board_id: String, initials: String) -> int:
-	Game.initials = initials
+## The name that goes on the score boards: the player profile(s) set in the menu.
+func _board_name() -> String:
+	var n1: String = Game.profile_name if Game.profile_name != "" else "WARDEN"
+	if players.size() > 1:
+		var n2: String = Game.profile2_name if Game.profile2_name != "" else "PLAYER 2"
+		return "%s & %s" % [n1, n2]
+	return n1
+
+
+func submit_score(board_id: String, name: String) -> int:
 	return Game.board_add(board_id, {
-		"name": initials, "score": total_score(), "level": level.name, "wave": wave,
+		"name": name, "score": total_score(), "level": level.name, "wave": wave,
 		"date": Time.get_date_string_from_system(),
 	})

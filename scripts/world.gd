@@ -4,6 +4,8 @@ extends Node3D
 
 const Util := preload("res://scripts/util.gd")
 const Lane := preload("res://scripts/lane.gd")
+const Terrain := preload("res://scripts/terrain.gd")
+const Scenery := preload("res://scripts/scenery.gd")
 
 const ROAD_HALF := 4.0
 const PAVE_HALF := 8.0
@@ -13,6 +15,8 @@ const SPOT_SPACING := 7.5
 const SHOP_NAMES := ["CHIPPY", "BAKERY", "BOOKIES", "THE CROWN", "LAUNDRETTE", "NEWSAGENT", "CAFE", "BARBER",
 	"KEBABS", "POUND SHOP", "CHEMIST", "TOY SHOP", "BUTCHER", "FLORIST", "VAPE", "CHARITY"]
 const NEON_NAMES := ["NOODLES", "KARAOKE", "HOTEL", "24/7", "ARCADE", "PIZZA", "CLUB", "SUSHI", "BAR", "CINEMA"]
+const XMAS_NAMES := ["TOY SHOP", "MINCE PIES", "GIFTS", "SANTA'S", "CRACKERS", "BAKERY", "THE HOLLY", "JUMPERS",
+	"TINSEL TOWN", "SWEET SHOP", "BOOKS", "DECORATIONS"]
 
 var def: Dictionary
 var rng: RandomNumberGenerator
@@ -33,6 +37,7 @@ var road_puddles: Array[Vector3] = []
 var slow_zones: Array = []  # [Vector2 centre, radius]
 var bus_stops := 0
 var path_rects: Array[Rect2] = []
+var lifted := false  # true once the terrain has lifted everything onto the hills
 
 
 func build(level: Dictionary, random: RandomNumberGenerator, with_spots := true) -> void:
@@ -73,6 +78,20 @@ func build(level: Dictionary, random: RandomNumberGenerator, with_spots := true)
 	_build_paths()
 	_build_theme()
 	_build_event_deco()
+	Terrain.apply(self)
+	lifted = true
+	_trim_shadows(self)
+
+
+## Small props and flat ground pieces don't need to cast shadows: skipping them keeps
+## the shadow pass cheap now the streets are lined with houses, trees and park furniture.
+func _trim_shadows(n: Node) -> void:
+	for c in n.get_children():
+		if c is MeshInstance3D and c.mesh:
+			var sz: Vector3 = c.get_aabb().size * c.global_basis.get_scale().abs() if c.is_inside_tree() else c.get_aabb().size * c.scale.abs()
+			if sz.y < 0.2 or maxf(sz.x, maxf(sz.y, sz.z)) < 0.7:
+				c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_trim_shadows(c)
 
 
 func _seg_rect(a: Vector2, b: Vector2, half: float) -> Rect2:
@@ -94,6 +113,16 @@ static func yaw_of(d: Vector3) -> float:
 
 
 # ---------------------------------------------------------------- queries
+
+## Ground height at p (hills and car park ramps; 0 on flat levels).
+func height_at(p: Vector3) -> float:
+	return Terrain.height(def.get("terrain", {}), p.x, p.z)
+
+
+## Nose-up angle for a car at p facing fwd.
+func pitch_at(p: Vector3, fwd: Vector3) -> float:
+	return Terrain.pitch(def.get("terrain", {}), p, fwd)
+
 
 ## The nearest walkable point to p, for spawning safely.
 func nearest_walkable(p: Vector3) -> Vector3:
@@ -140,7 +169,8 @@ func random_walk_point(r: RandomNumberGenerator, away_from := Vector3.ZERO, min_
 		if pavement and _in_road(Vector2(p.x, p.z)):
 			continue
 		if p.distance_to(away_from) >= min_dist:
-			return p
+			break
+	p.y = height_at(p) if lifted else 0.0
 	return p
 
 
@@ -166,10 +196,11 @@ func build_road_puddles() -> void:
 						junction = true
 				if junction or not bounds.grow(-2.0).has_point(q):
 					continue
-				var puddle := Util.cylinder(rng.randf_range(0.9, 1.3), 0.02, water, _v3(q, 0.075))
+				var gh := height_at(_v3(q))
+				var puddle := Util.cylinder(rng.randf_range(0.9, 1.3), 0.02, water, _v3(q, 0.075 + gh))
 				puddle.scale = Vector3(1.5, 1, 0.8) if absf(d.x) > 0.5 else Vector3(0.8, 1, 1.5)
 				add_child(puddle)
-				road_puddles.append(_v3(q))
+				road_puddles.append(_v3(q, gh))
 			t += rng.randf_range(10.0, 16.0)
 
 
@@ -233,7 +264,7 @@ func _build_environment() -> void:
 	sun.rotation_degrees = Vector3(-60, 30, 0)
 	sun.light_color = def.sun
 	sun.light_energy = def.sun_energy * 0.7
-	sun.shadow_enabled = true
+	sun.shadow_enabled = Game.shadows_on()
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 
@@ -244,10 +275,12 @@ func _build_ground() -> void:
 
 
 func _build_roads() -> void:
-	var pave_col := Color(0.62, 0.61, 0.6) if def.theme != "snow" else Color(0.85, 0.87, 0.92)
+	var pave_col := Color(0.62, 0.61, 0.6) if def.theme not in ["snow", "xmas"] else Color(0.85, 0.87, 0.92)
 	if def.theme == "posh":
 		pave_col = Color(0.86, 0.8, 0.68)
-	var road_col := Color(0.3, 0.3, 0.33) if def.theme != "city" else Color(0.2, 0.2, 0.24)
+	elif def.theme == "halloween":
+		pave_col = Color(0.42, 0.4, 0.46)
+	var road_col := Color(0.3, 0.3, 0.33) if def.theme not in ["city", "halloween"] else Color(0.2, 0.2, 0.24)
 	var clip := region.grow(10.0)
 	for i in segments.size():
 		var pr := pave_rects[i].intersection(clip)
@@ -322,7 +355,7 @@ func _build_spots() -> void:
 				var n: Vector3 = _left(d) * side
 				var centre: Vector3 = _v3(a + d2 * t) + n * SPOT_OFFSET
 				var c2 := Vector2(centre.x, centre.z)
-				if not inner.has_point(c2):
+				if not inner.has_point(c2) or not _flat_at(c2):
 					continue
 				var junction := false
 				for j in pave_rects.size():
@@ -551,7 +584,7 @@ func _build_theme() -> void:
 			_line_buildings(Vector2(6, 10), Vector2(4.5, 8), 6.0, 2.0, _suburb_house)
 			_scatter(60, _tree)
 		"town":
-			_line_buildings(Vector2(6, 9), Vector2(5, 10), 7.0, 0.3, _shop)
+			_line_buildings(Vector2(6, 9), Vector2(5, 10), 7.0, 0.5, _shop)
 			_scatter(25, _market_stall)
 			_scatter(20, _tree)
 		"seaside":
@@ -564,7 +597,7 @@ func _build_theme() -> void:
 			_scatter(70, _pine)
 		"city":
 			_build_plaza()
-			_line_buildings(Vector2(8, 13), Vector2(10, 26), 9.0, 0.3, _tower)
+			_line_buildings(Vector2(8, 13), Vector2(10, 26), 9.0, 0.5, _tower)
 			_scatter(20, _tree)
 		"posh":
 			_line_buildings(Vector2(12, 16), Vector2(6, 9), 10.0, 5.0, _mansion)
@@ -574,7 +607,22 @@ func _build_theme() -> void:
 			_build_supermarket()
 		"multistorey":
 			_build_multistorey()
+		"halloween":
+			_build_graveyard(Rect2(-11.5, 38.5, 23, 50))
+			_line_buildings(Vector2(7, 10), Vector2(4.5, 7.5), 6.0, 2.0, _spooky_house)
+			_scatter(45, _dead_tree)
+			_scatter(30, _pumpkin)
+			add_child(Util.sphere(5.0, Util.glow(Color(1.0, 0.95, 0.75), 1.6), Vector3(-30, 34, -70)))
+		"xmas":
+			_build_xmas_square(Rect2(-30, -36, 58, 28))
+			_line_buildings(Vector2(6, 9), Vector2(5, 9), 7.0, 0.5, _xmas_shop)
+			_bunting_along(Color(1, 0.2, 0.2), Color(1, 0.85, 0.3), 3.2, true)
+			_scatter(30, _pine)
+			_scatter(10, _snowman)
+		"hills", "terraces":
+			Scenery.build_theme(self)
 	_street_furniture()
+	Scenery.dress(self)
 
 
 func _line_buildings(width: Vector2, height: Vector2, depth: float, setback: float, maker: Callable) -> void:
@@ -720,6 +768,198 @@ func _mansion(r: Rect2, h: float, facing: Vector3, setback: float) -> void:
 	_part(node, Vector3(s.x - 3.2, 1.1, 0.6), Color(0.2, 0.45, 0.2), Vector3(0, 0.55, front))
 
 
+# ---------------------------------------------------------------- Halloween
+
+func _spooky_house(r: Rect2, h: float, facing: Vector3, setback: float) -> void:
+	var palette := [Color(0.3, 0.26, 0.36), Color(0.25, 0.3, 0.28), Color(0.38, 0.3, 0.28), Color(0.22, 0.22, 0.28)]
+	var c: Color = palette[rng.randi() % palette.size()]
+	var node := _add_building(r, h, c, facing)
+	var s: Vector3 = node.get_meta("size")
+	var front := s.z / 2.0
+	_roof(node, Color(0.12, 0.1, 0.15))
+	_part(node, Vector3(1.2, 2.2, 0.2), Color(0.2, 0.1, 0.08), Vector3(0, 1.1, front + 0.05))
+	var lit: Color = [Color(1, 0.6, 0.15), Color(0.5, 1, 0.4), Color(0.8, 0.4, 1.0)][rng.randi() % 3]
+	_windows(node, Util.glow(lit, 1.4), 2, 2.6, 2.0 if h > 5 else 3.2)
+	# Pumpkins on the doorstep and a cobweb in the corner
+	for x in [-1.2, 1.2]:
+		if rng.randf() < 0.7:
+			var pk := Node3D.new()
+			pk.position = Vector3(x, 0, front + 0.6)
+			node.add_child(pk)
+			_pumpkin_mesh(pk, 0.4)
+	var web := Util.label3d("#", 60, Color(0.85, 0.85, 0.9, 0.7), Vector3(s.x / 2.0 - 0.5, s.y - 0.5, front + 0.1))
+	web.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	web.no_depth_test = false
+	node.add_child(web)
+	# Rickety garden fence
+	var front_y := front + setback - 0.4
+	var x := -s.x / 2.0 + 0.4
+	while x < s.x / 2.0 - 0.3:
+		if absf(x) > 0.8:
+			_part(node, Vector3(0.12, 0.9 + rng.randf_range(-0.2, 0.1), 0.08), Color(0.25, 0.2, 0.18), Vector3(x, 0.45, front_y))
+		x += 0.45
+	if rng.randf() < 0.25 and not node.get_meta("low"):
+		var sign := Util.label3d("HAUNTED", 50, Color(0.6, 1, 0.5), Vector3(0, minf(s.y + 0.6, 7.0), front + 0.2))
+		node.add_child(sign)
+
+
+func _pumpkin_mesh(parent: Node3D, size: float) -> void:
+	var body := Util.sphere(size, Util.mat(Color(1, 0.5, 0.05), true), Vector3(0, size * 0.8, 0))
+	body.scale = Vector3(1.2, 0.85, 1.2)
+	parent.add_child(body)
+	parent.add_child(Util.cylinder(size * 0.12, size * 0.4, Color(0.25, 0.45, 0.15), Vector3(0, size * 1.6, 0)))
+	var face := Util.glow(Color(1, 0.85, 0.25), 3.0)
+	for x in [-0.35, 0.35]:
+		parent.add_child(Util.prism(Vector3(size * 0.35, size * 0.3, 0.04), face, Vector3(x * size, size * 0.95, size * 1.15)))
+	parent.add_child(Util.box(Vector3(size * 0.8, size * 0.15, 0.04), face, Vector3(0, size * 0.55, size * 1.15)))
+
+
+func _pumpkin(p: Vector3) -> void:
+	var n := Node3D.new()
+	n.position = p
+	n.rotation.y = rng.randf_range(-0.6, 0.6)
+	add_child(n)
+	_pumpkin_mesh(n, rng.randf_range(0.4, 0.75))
+
+
+func _dead_tree(p: Vector3) -> void:
+	var bark := Color(0.2, 0.15, 0.13)
+	add_child(Util.cylinder(0.25, 3.2, bark, p + Vector3(0, 1.6, 0), false, 0.1))
+	for i in 4:
+		var a := i * TAU / 4.0 + rng.randf() * 0.8
+		var branch := Util.cylinder(0.1, 1.6, bark, p + Vector3(sin(a) * 0.55, 2.6 + i * 0.2, cos(a) * 0.55), false, 0.03)
+		branch.rotation = Vector3(cos(a) * 0.9, 0, -sin(a) * 0.9)
+		add_child(branch)
+
+
+func _build_graveyard(r: Rect2) -> void:
+	## The old graveyard inside the loop of the lane: railings, wonky headstones, a crypt and some mist
+	footprints.append(r)
+	add_child(Util.box(Vector3(r.size.x, 0.1, r.size.y), Color(0.16, 0.2, 0.12), _v3(r.get_center(), 0.02)))
+	var x := r.position.x
+	while x <= r.end.x:
+		add_child(Util.cylinder(0.05, 1.6, Color(0.1, 0.1, 0.12), Vector3(x, 0.8, r.position.y)))
+		add_child(Util.sphere(0.08, Color(0.1, 0.1, 0.12), Vector3(x, 1.65, r.position.y)))
+		x += 0.6
+	add_child(Util.box(Vector3(r.size.x, 0.08, 0.08), Color(0.1, 0.1, 0.12), Vector3(r.get_center().x, 1.4, r.position.y)))
+	var stone := Color(0.55, 0.55, 0.6)
+	var words := ["R.I.P.", "BOO", "R.I.P.", "TOWED", "FINED", "R.I.P."]
+	var gz := r.position.y + 3.0
+	var row := 0
+	while gz < r.position.y + 18.0:
+		var gx := r.position.x + 2.0 + (row % 2) * 1.2
+		while gx < r.end.x - 1.5:
+			var g := Node3D.new()
+			g.position = Vector3(gx, 0, gz)
+			g.rotation = Vector3(rng.randf_range(-0.15, 0.1), 0, rng.randf_range(-0.15, 0.15))
+			add_child(g)
+			g.add_child(Util.box(Vector3(1.0, 1.1, 0.25), Util.mat(stone, true), Vector3(0, 0.55, 0)))
+			var top := Util.cylinder(0.5, 0.25, Util.mat(stone, true), Vector3(0, 1.1, 0))
+			top.rotation.x = PI / 2
+			g.add_child(top)
+			if rng.randf() < 0.5:
+				var l := Util.label3d(words[rng.randi() % words.size()], 26, Color(0.2, 0.2, 0.25), Vector3(0, 0.75, 0.14))
+				l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+				l.no_depth_test = false
+				l.outline_size = 0
+				g.add_child(l)
+			gx += 2.6
+		gz += 3.2
+		row += 1
+	# Crypt
+	var crypt := Vector3(r.get_center().x, 0, r.position.y + 22.0)
+	add_child(Util.box(Vector3(5, 3, 4), Util.mat(Color(0.45, 0.45, 0.5), true), crypt + Vector3(0, 1.5, 0)))
+	var roof := Util.prism(Vector3(5.6, 1.4, 4.4), Color(0.3, 0.3, 0.35), crypt + Vector3(0, 3.7, 0))
+	add_child(roof)
+	add_child(Util.box(Vector3(1.4, 2.0, 0.1), Color(0.08, 0.06, 0.08), crypt + Vector3(0, 1.0, -2.02)))
+	var ghost := Util.label3d("WOOO...", 50, Color(0.7, 1, 0.75, 0.8), crypt + Vector3(0, 5.2, 0))
+	add_child(ghost)
+
+
+# ---------------------------------------------------------------- Christmas Eve
+
+func _xmas_shop(r: Rect2, h: float, facing: Vector3, _setback: float) -> void:
+	var palette := [Color(0.75, 0.25, 0.22), Color(0.9, 0.85, 0.75), Color(0.3, 0.45, 0.35), Color(0.55, 0.35, 0.3), Color(0.85, 0.8, 0.88)]
+	var c: Color = palette[rng.randi() % palette.size()]
+	var node := _add_building(r, h, c, facing)
+	var s: Vector3 = node.get_meta("size")
+	var front := s.z / 2.0
+	_roof(node, c, true)
+	var shop_col: Color = [Color(0.8, 0.1, 0.12), Color(0.1, 0.5, 0.2), Color(0.9, 0.75, 0.2)][rng.randi() % 3]
+	_part(node, Vector3(s.x - 0.4, 3.0, 0.3), shop_col, Vector3(0, 1.5, front + 0.1))
+	_part(node, Vector3(s.x - 1.6, 1.8, 0.1), Util.glow(Color(1, 0.85, 0.5), 1.0), Vector3(0, 1.2, front + 0.3))
+	_windows(node, Util.glow(Color(1, 0.8, 0.45), 1.2), 2, 2.4, 4.6)
+	# Snow on the shop front, a wreath on the door and fairy lights along the top
+	_part(node, Vector3(s.x - 0.2, 0.15, 0.8), Color(0.97, 0.98, 1.0), Vector3(0, 3.05, front + 0.4))
+	var wreath := Util.torus(0.25, 0.42, Util.mat(Color(0.1, 0.45, 0.2), true), Vector3(s.x / 2.0 - 0.9, 2.2, front + 0.4))
+	wreath.rotation.x = PI / 2
+	node.add_child(wreath)
+	node.add_child(Util.sphere(0.1, Util.mat(Color(0.9, 0.1, 0.1)), Vector3(s.x / 2.0 - 0.9, 1.9, front + 0.45)))
+	var t := -s.x / 2.0 + 0.4
+	var i := 0
+	while t < s.x / 2.0 - 0.2:
+		var bulb: Color = [Color(1, 0.2, 0.2), Color(0.3, 1, 0.4), Color(1, 0.85, 0.3), Color(0.4, 0.6, 1)][i % 4]
+		node.add_child(Util.sphere(0.09, Util.glow(bulb, 3.0), Vector3(t, 3.0 - absf(sin(t)) * 0.15, front + 0.3)))
+		t += 0.6
+		i += 1
+	var sign := Util.label3d(XMAS_NAMES[rng.randi() % XMAS_NAMES.size()], 64, Color.WHITE, Vector3(0, minf(3.7, s.y - 0.4), front + 0.4))
+	sign.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	sign.no_depth_test = false
+	node.add_child(sign)
+
+
+func _snowman(p: Vector3) -> void:
+	add_child(Util.sphere(0.9, Util.mat(Color.WHITE, true), p + Vector3(0, 0.8, 0)))
+	add_child(Util.sphere(0.6, Util.mat(Color.WHITE, true), p + Vector3(0, 2.0, 0)))
+	add_child(Util.cylinder(0.08, 0.4, Color(1, 0.5, 0.1), p + Vector3(0, 2.0, 0.65)))
+	add_child(Util.cylinder(0.4, 0.5, Color(0.1, 0.1, 0.1), p + Vector3(0, 2.75, 0)))
+	add_child(Util.box(Vector3(1.0, 0.15, 0.3), Color(0.85, 0.1, 0.1), p + Vector3(0, 1.55, 0.2)))
+
+
+func _build_xmas_square(r: Rect2) -> void:
+	## The town square: a giant tree with presents, Santa's grotto and market stalls round the edge
+	footprints.append(r.grow(2.0))
+	add_child(Util.box(Vector3(r.size.x, 0.09, r.size.y), Color(0.78, 0.76, 0.8), _v3(r.get_center(), 0.0)))
+	var tree := Vector3(r.get_center().x - 8.0, 0, r.position.y + 6.0)
+	add_solid(Vector3(3.0, 1.6, 3.0), Color(0.55, 0.15, 0.12), tree + Vector3(0, 0.8, 0))
+	for i in 5:
+		add_child(Util.cylinder(4.2 - i * 0.8, 2.6, Color(0.08, 0.38, 0.18), tree + Vector3(0, 2.6 + i * 1.8, 0), false, 0.15))
+	for i in 30:
+		var a := i * 2.4
+		var y := 2.0 + (i % 10) * 0.85
+		var rad := 4.0 - (y - 2.0) * 0.45
+		var col: Color = [Color(1, 0.2, 0.2), Color(1, 0.85, 0.2), Color(0.3, 0.6, 1), Color(0.95, 0.95, 1)][i % 4]
+		add_child(Util.sphere(0.25, Util.glow(col, 2.5), tree + Vector3(sin(a) * rad, y, cos(a) * rad)))
+	add_child(Util.sphere(0.7, Util.glow(Color(1, 0.9, 0.3), 5.0), tree + Vector3(0, 11.6, 0)))
+	var tl := OmniLight3D.new()
+	tl.light_color = Color(1, 0.85, 0.5)
+	tl.light_energy = 3.0
+	tl.omni_range = 14.0
+	tl.position = tree + Vector3(0, 5, 3)
+	add_child(tl)
+	lights.append(tl)
+	for i in 7:
+		var a := i * TAU / 7.0
+		var c: Color = [Color(0.9, 0.15, 0.15), Color(0.15, 0.6, 0.25), Color(0.2, 0.4, 0.95), Color(0.95, 0.8, 0.2)][i % 4]
+		var gift := tree + Vector3(sin(a) * 2.2, 0.35, cos(a) * 2.2 + 0.4)
+		add_child(Util.box(Vector3(0.8, 0.7, 0.8), Util.mat(c, true), gift))
+		add_child(Util.box(Vector3(0.82, 0.72, 0.15), Color(1, 0.9, 0.4), gift))
+	# Santa's grotto
+	var grotto := Vector3(r.get_center().x + 12.0, 0, r.position.y + 4.5)
+	add_solid(Vector3(6, 3.2, 4), Color(0.5, 0.32, 0.2), grotto + Vector3(0, 1.6, 0))
+	add_child(Util.prism(Vector3(6.6, 1.6, 4.6), Color(0.97, 0.98, 1.0), grotto + Vector3(0, 4.0, 0)))
+	add_child(Util.box(Vector3(1.4, 2.0, 0.1), Util.glow(Color(1, 0.75, 0.4), 1.5), grotto + Vector3(0, 1.0, 2.02)))
+	add_child(Util.label3d("SANTA'S GROTTO", 64, Color(1, 0.3, 0.3), grotto + Vector3(0, 5.6, 0)))
+	add_child(Util.label3d("BACK SOON - ON MY ROUNDS!", 30, Color.WHITE, grotto + Vector3(0, 2.6, 2.1)))
+	# Market stalls along the back of the square
+	var x := r.position.x + 3.0
+	while x < r.end.x - 8.0:
+		if absf(x - tree.x) > 6.0:
+			_market_stall(Vector3(x, 0, r.position.y + 2.0))
+		x += 6.0
+	add_child(Util.label3d("MERRY CHRISTMAS!", 90, Color(1, 0.85, 0.3), Vector3(r.get_center().x, 8.0, r.position.y - 2.0)))
+
+
 func _tree(p: Vector3) -> void:
 	add_child(Util.cylinder(0.25, 2.0, Color(0.45, 0.3, 0.2), p + Vector3(0, 1.0, 0)))
 	var leaf := Color(0.3, 0.6, 0.25) if def.theme != "city" else Color(0.15, 0.35, 0.25)
@@ -847,8 +1087,8 @@ func _build_plaza() -> void:
 
 
 func _build_paths() -> void:
-	var col := Color(0.72, 0.62, 0.5) if def.theme not in ["snow", "city"] else (Color(0.85, 0.87, 0.92) if def.theme == "snow" else Color(0.3, 0.28, 0.36))
-	var edge_col := Color(0.3, 0.55, 0.25) if def.theme not in ["snow", "city"] else Color(0.45, 0.45, 0.5)
+	var col := Color(0.72, 0.62, 0.5) if def.theme not in ["snow", "city", "xmas", "halloween"] else (Color(0.85, 0.87, 0.92) if def.theme in ["snow", "xmas"] else Color(0.3, 0.28, 0.36))
+	var edge_col := Color(0.3, 0.55, 0.25) if def.theme not in ["snow", "city", "xmas", "halloween"] else Color(0.45, 0.45, 0.5)
 	for r in path_rects:
 		add_child(Util.box(Vector3(r.size.x, 0.1, r.size.y), col, _v3(r.get_center(), 0.0)))
 		# Paving stripes, and low hedges or railings along the long sides
@@ -950,54 +1190,118 @@ func _planter(p: Vector3) -> void:
 
 
 func _build_multistorey() -> void:
+	## A split-level car park: flat decks joined by ramps (see the "decks" terrain in levels.gd).
+	## Height is added afterwards by terrain.gd, so everything here is built as if flat.
 	var concrete := Color(0.55, 0.55, 0.57)
-	# Low outer walls with "LEVEL 3" painted on, so it reads as a floor of a car park
+	var t: Dictionary = def.get("terrain", {})
+	var knots: Array = t.get("knots", [])
+	var ramps: Array = []  # [x0, x1] bands where the floor slopes
+	for i in range(1, knots.size()):
+		if absf(float(knots[i][1]) - float(knots[i - 1][1])) > 0.01:
+			ramps.append([float(knots[i - 1][0]), float(knots[i][0])])
+	# Outer walls, in short pieces so they step up the ramps with the floor
 	var r := bounds.grow(1.0)
-	for side in [[Vector2(r.position.x, r.position.y), Vector2(r.end.x, r.position.y)], [Vector2(r.position.x, r.end.y), Vector2(r.end.x, r.end.y)],
-			[Vector2(r.end.x, r.position.y), Vector2(r.end.x, r.end.y)]]:
-		var a: Vector2 = side[0]
-		var b: Vector2 = side[1]
-		var mid := (a + b) / 2.0
-		var horizontal := absf(a.y - b.y) < 0.1
-		add_child(Util.box(Vector3(a.distance_to(b) if horizontal else 0.6, 1.2, 0.6 if horizontal else a.distance_to(b)), concrete, _v3(mid, 0.6), true))
-		add_child(Util.box(Vector3(a.distance_to(b) if horizontal else 0.62, 0.2, 0.62 if horizontal else a.distance_to(b)), Color(1, 0.85, 0.1), _v3(mid, 1.1)))
-	for x in [-40.0, 0.0, 30.0]:
-		var l := Util.label3d("LEVEL 3", 120, Color(1, 0.85, 0.1), Vector3(x, 0.2, 0))
+	var x := r.position.x
+	while x < r.end.x:
+		for zz in [r.position.y, r.end.y]:
+			if not _in_road(Vector2(x + 1.5, zz)):
+				add_child(Util.box(Vector3(3.0, 1.2, 0.6), concrete, Vector3(x + 1.5, 0.6, zz), true))
+				add_child(Util.box(Vector3(3.02, 0.2, 0.62), Color(1, 0.85, 0.1), Vector3(x + 1.5, 1.1, zz)))
+		x += 3.0
+	var z := r.position.y
+	while z < r.end.y:
+		if not _in_road(Vector2(r.end.x, z + 1.5)):
+			add_child(Util.box(Vector3(0.6, 1.2, 3.0), concrete, Vector3(r.end.x, 0.6, z + 1.5), true))
+			add_child(Util.box(Vector3(0.62, 0.2, 3.02), Color(1, 0.85, 0.1), Vector3(r.end.x, 1.1, z + 1.5)))
+		z += 3.0
+	# Deck names painted on the floor
+	var decks := []
+	var prev := bounds.position.x
+	for rp in ramps:
+		decks.append([prev, rp[0]])
+		prev = rp[1]
+	decks.append([prev, bounds.end.x])
+	var names: Array = t.get("names", ["LEVEL 2", "LEVEL 3", "ROOF"])
+	for i in decks.size():
+		var cx := (float(decks[i][0]) + float(decks[i][1])) / 2.0
+		var l := Util.label3d(names[mini(i, names.size() - 1)], 110, Color(1, 0.85, 0.1), Vector3(cx, 0.2, 0))
 		l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		l.rotation.x = -PI / 2
 		add_child(l)
-	# Pillars on a grid, kept off the aisles and parking bays
-	var x := bounds.position.x + 4.0
+	# The gap beside each ramp: a dark drop with railings, so the ramps read as ramps
+	for rp in ramps:
+		var x0: float = rp[0]
+		var x1: float = rp[1]
+		for seg in segments:
+			if absf(seg.a.y - seg.b.y) > 0.1:
+				continue
+			# Arrows and RAMP painted on the aisles
+			var rz: float = seg.a.y
+			var up: bool = (seg.b.x > seg.a.x) == (float(knots[0][1]) < float(knots[-1][1]))
+			for k in 2:
+				var ax := lerpf(x0, x1, 0.3 + k * 0.4)
+				var arrow := Util.label3d("RAMP", 80, Color.WHITE, Vector3(ax, 0.12, rz))
+				arrow.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+				arrow.rotation = Vector3(-PI / 2, 0, 0)
+				add_child(arrow)
+			add_child(Util.label3d("UP >" if up else "< DOWN", 50, Color(0.6, 1, 0.6), Vector3((x0 + x1) / 2.0, 3.2, rz - 5.0)))
+		var zz := bounds.position.y
+		while zz < bounds.end.y:
+			var q := Vector2((x0 + x1) / 2.0, zz + 1.0)
+			if not _in_any_walk(q) and not _in_road(q):
+				var mx := x0 + 0.5
+				while mx < x1:
+					add_child(Util.box(Vector3(1.0, 0.1, 2.0), Color(0.06, 0.06, 0.08), Vector3(mx + 0.5, 0.12, zz + 1.0)))
+					mx += 1.0
+			zz += 2.0
+		# Railings along the drop
+		var rx := x0
+		while rx <= x1:
+			for edge_z in _gap_edges(rx):
+				add_child(Util.box(Vector3(1.0, 0.18, 0.15), Color(1, 0.8, 0.1) if int(rx) % 2 == 0 else Color(0.1, 0.1, 0.12), Vector3(rx, 0.95, edge_z)))
+				add_child(Util.box(Vector3(0.1, 0.9, 0.1), Color(0.8, 0.8, 0.82), Vector3(rx, 0.45, edge_z)))
+			rx += 1.0
+		for ex in [x0, x1]:
+			var ez := bounds.position.y
+			while ez < bounds.end.y:
+				var q := Vector2(ex + (0.6 if ex == x0 else -0.6), ez + 0.5)
+				if not _in_any_walk(q) and not _in_road(q):
+					add_child(Util.box(Vector3(0.15, 0.18, 1.0), Color(1, 0.8, 0.1), Vector3(ex, 0.95, ez + 0.5)))
+					add_child(Util.box(Vector3(0.1, 0.9, 0.1), Color(0.8, 0.8, 0.82), Vector3(ex, 0.45, ez + 0.5)))
+				ez += 1.0
+	# Pillars on a grid, kept off the aisles, parking bays and ramps; the roof deck has none
+	var roof_x: float = float(knots[-1][0]) if not knots.is_empty() else INF
+	x = bounds.position.x + 4.0
 	while x < bounds.end.x - 2.0:
-		var z := bounds.position.y + 3.0
+		z = bounds.position.y + 3.0
 		while z < bounds.end.y - 2.0:
 			var q := Vector2(x, z)
-			var clear := not _in_road(q)
+			var clear := not _in_road(q) and x < roof_x and _flat_at(q)
 			for s in spots:
 				if Vector2(s.pos.x, s.pos.z).distance_to(q) < 4.0:
 					clear = false
 			for pr in path_rects:
 				if pr.grow(0.8).has_point(q):
 					clear = false
-			if clear:
+			if clear and _in_any_walk(q):
 				add_solid(Vector3(1.0, 5.0, 1.0), concrete, _v3(q, 2.5))
 				for h in [0.4, 1.2]:
 					add_child(Util.box(Vector3(1.04, 0.3, 1.04), Color(1, 0.8, 0.1) if h < 1.0 else Color(0.1, 0.1, 0.1), _v3(q, h)))
 			z += 12.0
 		x += 12.0
-	# Strip lights hanging over the aisles
+	# Strip lights hanging over the aisles (not over the open roof)
 	for seg in segments:
 		var a: Vector2 = seg.a
 		var b: Vector2 = seg.b
 		var d := (b - a).normalized()
-		var t := 6.0
-		while t < a.distance_to(b):
-			var q: Vector2 = a + d * t
-			if bounds.has_point(q):
+		var tt := 6.0
+		while tt < a.distance_to(b):
+			var q: Vector2 = a + d * tt
+			if bounds.has_point(q) and q.x < roof_x:
 				var strip := Util.box(Vector3(2.4, 0.12, 0.3), Util.glow(Color(0.85, 0.95, 1.0), 3.0), _v3(q, 4.8))
 				strip.rotation.y = yaw_of(_v3(d))
 				add_child(strip)
-				if lights.size() < 18:
+				if lights.size() < 16:
 					var light := OmniLight3D.new()
 					light.light_color = Color(0.85, 0.95, 1.0)
 					light.light_energy = 1.6
@@ -1005,10 +1309,50 @@ func _build_multistorey() -> void:
 					light.position = _v3(q, 4.4)
 					add_child(light)
 					lights.append(light)
-			t += 14.0
-	# Ramp to the next level, and a pay machine
-	add_child(Util.box(Vector3(10, 0.3, 14), Color(0.45, 0.45, 0.48), Vector3(bounds.end.x + 6.0, 0.6, 0), true))
-	add_child(Util.label3d("UP TO LEVEL 4 >", 70, Color.WHITE, Vector3(bounds.end.x + 4.0, 2.0, 0)))
+			tt += 14.0
+	# Roof deck: lamp posts and a view of the city lights
+	if roof_x < INF:
+		for q in [Vector2(roof_x + 4, -9), Vector2(roof_x + 4, 9), Vector2(bounds.end.x - 4, 0)]:
+			add_solid(Vector3(0.3, 4.2, 0.3), Color(0.25, 0.25, 0.3), _v3(q, 2.1), false)
+			add_child(Util.box(Vector3(0.6, 0.25, 0.6), Util.glow(Color(1, 0.9, 0.6), 2.5), _v3(q, 4.3)))
+			if lights.size() < 20:
+				var l := OmniLight3D.new()
+				l.light_color = Color(1, 0.9, 0.6)
+				l.light_energy = 2.2
+				l.omni_range = 10.0
+				l.position = _v3(q, 3.8)
+				add_child(l)
+				lights.append(l)
+		for i in 30:
+			var bx := rng.randf_range(bounds.end.x + 20, bounds.end.x + 80)
+			var bz := rng.randf_range(bounds.position.y - 60, bounds.end.y)
+			var bh := rng.randf_range(8, 30)
+			var tower := Util.box(Vector3(8, bh, 8), Color(0.12, 0.12, 0.18), Vector3(bx, bh / 2.0 - 4.0, bz))
+			add_child(tower)
+			for k in 3:
+				add_child(Util.box(Vector3(6, 0.6, 0.1), Util.glow(Color(1, 0.85, 0.5), 1.5), Vector3(bx, rng.randf_range(0, bh - 5.0), bz + 4.05)))
+
+
+## Is the floor level here (not on a ramp)?
+func _flat_at(q: Vector2) -> bool:
+	var t: Dictionary = def.get("terrain", {})
+	if t.get("type", "") != "decks":
+		return true
+	return absf(Terrain.height(t, q.x + 1.0, q.y) - Terrain.height(t, q.x - 1.0, q.y)) < 0.01
+
+
+## z positions along x where the walkable floor meets the drop beside a ramp.
+func _gap_edges(x: float) -> Array:
+	var out := []
+	var z := bounds.position.y
+	var was := _in_any_walk(Vector2(x, z))
+	while z < bounds.end.y:
+		z += 0.5
+		var now := _in_any_walk(Vector2(x, z))
+		if now != was:
+			out.append(z - 0.25)
+		was = now
+	return out
 
 
 # ---------------------------------------------------------------- special event decorations

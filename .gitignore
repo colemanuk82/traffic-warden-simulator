@@ -2,3 +2,5 @@ godot/
 .godot/
 dev/
 *.tmp
+__pycache__/
+*.import

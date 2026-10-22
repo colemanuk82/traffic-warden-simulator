@@ -212,7 +212,7 @@ func _physics_process(delta: float) -> void:
 func _move() -> void:
 	var before := global_position
 	move_and_slide()
-	position.y = 0.0
+	position.y = main.world.height_at(position)
 	global_position = main.world.clamp_move(before, global_position)
 
 

@@ -15,10 +15,7 @@ func _init(pts: PackedVector3Array) -> void:
 
 
 func _segment(s: float) -> int:
-	for i in range(1, cum.size()):
-		if s <= cum[i]:
-			return i - 1
-	return cum.size() - 2
+	return clampi(cum.bsearch(s, true) - 1, 0, cum.size() - 2)
 
 
 func sample(s: float) -> Vector3:
@@ -48,3 +45,25 @@ func project(p: Vector3) -> float:
 			best_d = d
 			best_s = cum[i] + ab.length() * t
 	return best_s
+
+
+## Gives the lane heights from the ground (hills, car park ramps), adding a point every couple of metres.
+func drape(height_at: Callable) -> void:
+	var out := PackedVector3Array()
+	for i in range(points.size() - 1):
+		var a := points[i]
+		var b := points[i + 1]
+		var n := maxi(int(ceil(Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z)) / 2.0)), 1)
+		for k in n:
+			var p := a.lerp(b, float(k) / n)
+			p.y = height_at.call(p)
+			out.append(p)
+	var last := points[points.size() - 1]
+	last.y = height_at.call(last)
+	out.append(last)
+	points = out
+	cum = PackedFloat32Array([0.0])
+	length = 0.0
+	for i in range(1, points.size()):
+		length += points[i - 1].distance_to(points[i])
+		cum.append(length)

@@ -3,6 +3,7 @@ extends CanvasLayer
 
 const Prompt := preload("res://scripts/prompt.gd")
 const Career := preload("res://scripts/career.gd")
+const SettingsPanel := preload("res://scripts/settings_panel.gd")
 const BAR_W := 400.0
 
 var main
@@ -17,6 +18,9 @@ var flash_rect: ColorRect
 var minimap: Control
 var pause_root: Control
 var pause_first: Button
+var pause_menu: Control
+var pause_settings: Control
+var pause_settings_button: Button
 var results_root: Control
 var results_box: VBoxContainer
 var results_first: Button
@@ -198,6 +202,7 @@ func _build_pause() -> void:
 	panel.position = Vector2(440, 170)
 	panel.size = Vector2(400, 380)
 	pause_root.add_child(panel)
+	pause_menu = panel
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 16)
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -211,6 +216,7 @@ func _build_pause() -> void:
 	v.add_child(title)
 	pause_first = _button("Back to Work", v, func() -> void: main.set_paused(false))
 	_button("Restart Shift", v, func() -> void: main.restart())
+	pause_settings_button = _button("Settings", v, open_pause_settings)
 	_button("Quit to Menu", v, func() -> void: main.quit_to_menu())
 	var hints := HBoxContainer.new()
 	hints.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -218,6 +224,11 @@ func _build_pause() -> void:
 	hints.add_child(Prompt.make("ui_accept", "Select", 28, 20))
 	hints.add_child(Prompt.make("pause", "Resume", 28, 20))
 	v.add_child(hints)
+	pause_settings = SettingsPanel.new()
+	pause_settings.position = Vector2(40, 100)
+	pause_settings.visible = false
+	pause_settings.closed.connect(close_pause_settings)
+	pause_root.add_child(pause_settings)
 	pause_root.visible = false
 
 
@@ -275,6 +286,8 @@ func update_player(i: int, d: Dictionary) -> void:
 		status = "SPEED BOOST %ds" % int(ceil(d.boost))
 	if d.soaked:
 		status = "SOAKED!"
+	if status == "" and d.get("sweets", -1) >= 0:
+		status = "SWEETS x%d" % d.sweets if d.sweets > 0 else "NO SWEETS! WATCH OUT"
 	u.status.text = status
 	if d.gadget != "":
 		var name: String = {"clamp": "Wheel Clamp", "tow": "Tow Truck", "camera": "Camera Van"}[d.gadget]
@@ -360,7 +373,8 @@ func _draw_minimap() -> void:
 	for d in get_tree().get_nodes_in_group("drivers"):
 		minimap.draw_circle(to_map.call(d.global_position), 3.0, Color(1, 0.3, 0.25))
 	for pk in main.pickups:
-		minimap.draw_circle(to_map.call(pk.node.position), 3.0, Color(0.6, 0.4, 0.2) if pk.kind == "coffee" else Color(0.3, 1, 0.3))
+		var pk_col: Color = {"coffee": Color(0.6, 0.4, 0.2), "sweets": Color(1, 0.55, 0.1), "present": Color(1, 0.3, 0.3)}.get(pk.kind, Color(0.3, 1, 0.3))
+		minimap.draw_circle(to_map.call(pk.node.position), 3.0, pk_col)
 	if main.boss_car != null and is_instance_valid(main.boss_car):
 		minimap.draw_circle(to_map.call(main.boss_car.position), 5.0, Color(1, 0.3, 0.9))
 	for i in main.players.size():
@@ -395,8 +409,26 @@ func banner(text: String, duration: float) -> void:
 
 func show_pause(paused: bool) -> void:
 	pause_root.visible = paused
+	pause_settings.visible = false
+	pause_menu.visible = true
 	if paused:
 		pause_first.grab_focus()
+
+
+func open_pause_settings() -> void:
+	pause_menu.visible = false
+	pause_settings.visible = true
+	pause_settings.open()
+
+
+## True if the settings were open (and are now closed), so Esc goes back a step instead of resuming.
+func close_pause_settings() -> bool:
+	if not pause_settings.visible:
+		return false
+	pause_settings.visible = false
+	pause_menu.visible = true
+	pause_settings_button.grab_focus()
+	return true
 
 
 func show_results(r: Dictionary) -> void:
@@ -420,7 +452,7 @@ func show_results(r: Dictionary) -> void:
 				verdict_text = "IT'S A DRAW!"
 			else:
 				var p1: bool = a.tickets > b.tickets or (a.tickets == b.tickets and a.score > b.score)
-				verdict_text = "PLAYER %d WINS!" % (1 if p1 else 2)
+				verdict_text = "%s WINS!" % _player_name(0 if p1 else 1).to_upper()
 			good = true
 	_res_label(title_text, 50, Color(1, 0.86, 0.15), true)
 	_res_label(verdict_text, 32, Color(0.4, 1, 0.45) if good else Color(1, 0.4, 0.35))
@@ -451,7 +483,7 @@ func show_results(r: Dictionary) -> void:
 	if r.mode == "race":
 		for i in 2:
 			var pr: Dictionary = r.players[i]
-			lines.append("Player %d:  %d tickets   %d points   %d punches" % [i + 1, pr.tickets, pr.score, pr.punches])
+			lines.append("%s:  %d tickets   %d points   %d punches" % [_player_name(i), pr.tickets, pr.score, pr.punches])
 	else:
 		lines.append("Tickets  %d%s        Score  %d%s" % [r.tickets, (" / %d" % r.quota) if r.mode != "endless" else "", r.score, "   NEW BEST!" if r.new_best else ""])
 	lines.append("Perfect writes %d    Best combo x%s    Close calls %d    Bosses beaten %d" % [r.perfects, str(r.best_combo), r.close_calls, r.bosses])
@@ -472,6 +504,8 @@ func show_results(r: Dictionary) -> void:
 		for c in r.challenges:
 			ct.append("%s CHALLENGE DONE: %s  (+£%d)" % ["WEEKLY" if c.get("weekly", false) else "DAILY", c.text, c.wages])
 		_res_label("\n".join(ct), 19, Color(0.5, 0.85, 1.0))
+	if int(r.get("board_place", -1)) >= 0:
+		_res_label("HIGH SCORE!  %s is number %d on the board" % [r.board_name, int(r.board_place) + 1], 22, Color(1, 0.85, 0.2), true)
 	if not r.unlocks.is_empty():
 		var t := "UNLOCKED!  " + ",  ".join(PackedStringArray(r.unlocks.slice(0, 4)))
 		if r.unlocks.size() > 4:
@@ -532,6 +566,11 @@ func _res_label(text: String, size: int, color := Color.WHITE, title := false) -
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	results_box.add_child(l)
 	return l
+
+
+static func _player_name(i: int) -> String:
+	var n: String = Game.profile_name if i == 0 else Game.profile2_name
+	return n if n != "" else "Player %d" % (i + 1)
 
 
 static func _clock(t: float) -> String:
