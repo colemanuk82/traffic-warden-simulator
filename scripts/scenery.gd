@@ -99,8 +99,11 @@ static func _building(w, theme: String, r: Rect2, facing: Vector3) -> bool:
 static func park_tile(w, theme: String, r: Rect2) -> void:
 	var rng: RandomNumberGenerator = w.rng
 	var snow := theme == "snow" or season(w) == "xmas"
+	var spooky := season(w) == "halloween"
 	var night: bool = w.def.get("night", false)
 	var grass := Color(0.42, 0.74, 0.33) if not snow else Color(0.95, 0.97, 1.0)
+	if spooky:
+		grass = Color(0.36, 0.42, 0.22)  # autumn grass
 	if theme == "city":
 		grass = Color(0.2, 0.4, 0.22)
 	var c := r.get_center()
@@ -111,7 +114,9 @@ static func park_tile(w, theme: String, r: Rect2) -> void:
 		var col := grass if i % 2 == 0 else grass.lightened(0.08)
 		w.add_child(Util.box(Vector3(sw, 0.06, r.size.y + 2.0), col, Vector3(r.position.x - 1.0 + sw * (i + 0.5), 0.02, c.y)))
 	var roll := rng.randf()
-	if roll < 0.1 and not snow:
+	if spooky and roll < 0.42:
+		_spooky_park_feature(w, c, rng, roll)
+	elif roll < 0.1 and not snow:
 		# Duck pond
 		w.add_child(Util.cylinder(3.2, 0.12, Color(0.55, 0.45, 0.3), Vector3(c.x, 0.03, c.y)))
 		w.add_child(Util.cylinder(2.8, 0.1, Color(0.3, 0.55, 0.85), Vector3(c.x, 0.06, c.y)))
@@ -145,8 +150,47 @@ static func park_tile(w, theme: String, r: Rect2) -> void:
 			tp.x = r.position.x + 1.2 if tp.x < c.x else r.end.x - 1.2
 		if snow:
 			w._pine(tp)
+		elif spooky:
+			if rng.randf() < 0.5 and w.has_method("_dead_tree"):
+				w._dead_tree(tp)
+			else:
+				autumn_tree(w, tp, rng)
 		else:
 			park_tree(w, tp, rng)
+
+
+## Halloween parks: a murky bubbling pond, a pumpkin patch or a crooked bench under a lantern.
+static func _spooky_park_feature(w, c: Vector2, rng: RandomNumberGenerator, roll: float) -> void:
+	if roll < 0.12:
+		w.add_child(Util.cylinder(3.2, 0.12, Color(0.3, 0.25, 0.18), Vector3(c.x, 0.03, c.y)))
+		w.add_child(Util.cylinder(2.8, 0.1, Color(0.25, 0.4, 0.2), Vector3(c.x, 0.06, c.y)))
+		for i in 5:
+			var b := Vector3(c.x + rng.randf_range(-1.8, 1.8), 0.14, c.y + rng.randf_range(-1.8, 1.8))
+			w.add_child(Util.sphere(rng.randf_range(0.08, 0.18), Util.glow(Color(0.5, 1.0, 0.3), 0.8), b))
+	elif roll < 0.3:
+		w.add_child(Util.box(Vector3(4.4, 0.2, 2.4), Color(0.3, 0.2, 0.12), Vector3(c.x, 0.1, c.y), true))
+		for i in 5:
+			var pp := Vector3(c.x + rng.randf_range(-1.8, 1.8), 0.2, c.y + rng.randf_range(-0.9, 0.9))
+			if w.has_method("_pumpkin"):
+				w._pumpkin(pp)
+			else:
+				w.add_child(Util.sphere(0.35, Color(1, 0.5, 0.05), pp + Vector3(0, 0.25, 0), true))
+	else:
+		w.add_child(Util.box(Vector3(1.8, 0.12, 0.5), Color(0.3, 0.22, 0.15), Vector3(c.x, 0.5, c.y), true))
+		w.add_child(Util.box(Vector3(1.8, 0.5, 0.1), Color(0.3, 0.22, 0.15), Vector3(c.x, 0.8, c.y - 0.25), true))
+		for bx in [-0.75, 0.75]:
+			w.add_child(Util.box(Vector3(0.1, 0.5, 0.45), Color(0.15, 0.15, 0.17), Vector3(c.x + bx, 0.25, c.y)))
+		w.add_child(Util.box(Vector3(0.2, 3.6, 0.2), Color(0.15, 0.15, 0.18), Vector3(c.x - 1.8, 1.8, c.y)))
+		w.add_child(Util.sphere(0.3, Util.glow(Color(1, 0.55, 0.15), 2.5), Vector3(c.x - 1.8, 3.7, c.y)))
+
+
+## A tree in autumn colours: orange, red and gold.
+static func autumn_tree(w, p: Vector3, rng: RandomNumberGenerator) -> void:
+	w.add_child(Util.cylinder(0.3, 2.6, Color(0.35, 0.24, 0.16), p + Vector3(0, 1.3, 0)))
+	var leaf := [Color(0.95, 0.45, 0.1), Color(0.8, 0.2, 0.1), Color(0.95, 0.7, 0.15)][rng.randi() % 3] as Color
+	w.add_child(Util.sphere(1.7, leaf, p + Vector3(0, 3.5, 0), true))
+	w.add_child(Util.sphere(1.1, leaf.lightened(0.1), p + Vector3(-0.7, 4.3, 0.4), true))
+	w.add_child(Util.sphere(1.0, leaf.darkened(0.1), p + Vector3(0.8, 3.9, -0.3), true))
 
 
 static func park_tree(w, p: Vector3, rng: RandomNumberGenerator) -> void:
