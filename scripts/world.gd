@@ -28,6 +28,8 @@ var walk_rects: Array[Rect2] = []
 var lanes: Array = []
 var spots: Array[Dictionary] = []
 var footprints: Array[Rect2] = []
+var perches: Array = []  # tops of garden walls (y = height above the ground) where cats like to sit
+var park_rects: Array = []  # park squares, for birds to land in
 var lights: Array[OmniLight3D] = []
 var region: Rect2
 var env: Environment
@@ -81,6 +83,7 @@ func build(level: Dictionary, random: RandomNumberGenerator, with_spots := true)
 	Terrain.apply(self)
 	lifted = true
 	_trim_shadows(self)
+	_merge_buildings()
 
 
 ## Small props and flat ground pieces don't need to cast shadows: skipping them keeps
@@ -89,9 +92,45 @@ func _trim_shadows(n: Node) -> void:
 	for c in n.get_children():
 		if c is MeshInstance3D and c.mesh:
 			var sz: Vector3 = c.get_aabb().size * c.global_basis.get_scale().abs() if c.is_inside_tree() else c.get_aabb().size * c.scale.abs()
-			if sz.y < 0.2 or maxf(sz.x, maxf(sz.y, sz.z)) < 0.7:
+			# Flat ground pieces, small props and thin plates on walls (windows, trims, tiles)
+			if sz.y < 0.2 or maxf(sz.x, maxf(sz.y, sz.z)) < 0.7 or minf(sz.x, minf(sz.y, sz.z)) < 0.16:
 				c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_trim_shadows(c)
+
+
+## Buildings are made of dozens of little boxes (walls, windows, tiles, chimneys). Once they're placed,
+## fold every building's pieces into one mesh per material for each patch of the map, which cuts
+## thousands of draw calls down to a few hundred.
+func _merge_buildings() -> void:
+	const CHUNK := 36.0
+	var groups := {}
+	var doomed := []
+	for b in get_children():
+		if not (b is Node3D) or not b.has_meta("size"):
+			continue
+		var cell := Vector2i(floori(b.global_position.x / CHUNK), floori(b.global_position.z / CHUNK))
+		for mi in b.find_children("*", "MeshInstance3D", true, false):
+			if mi.mesh == null or mi.material_override == null or not mi.visible:
+				continue
+			var key := [mi.material_override, mi.cast_shadow, cell]
+			if not groups.has(key):
+				groups[key] = []
+			groups[key].append(mi)
+			doomed.append(mi)
+	for key in groups:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for mi in groups[key]:
+			for si in mi.mesh.get_surface_count():
+				st.append_from(mi.mesh, si, mi.global_transform)
+		var merged := MeshInstance3D.new()
+		merged.mesh = st.commit()
+		merged.material_override = key[0]
+		merged.cast_shadow = key[1]
+		add_child(merged)
+	for mi in doomed:
+		mi.get_parent().remove_child(mi)
+		mi.queue_free()
 
 
 func _seg_rect(a: Vector2, b: Vector2, half: float) -> Rect2:
@@ -534,7 +573,58 @@ func _add_building(r: Rect2, height: float, color: Color, facing: Vector3) -> No
 	node.set_meta("size", Vector3(along, height, depth))
 	node.set_meta("fade", fade)
 	node.set_meta("low", low)
+	_walls(node, color)
 	return node
+
+
+func _walls(node: Node3D, color: Color) -> void:
+	## Plinth, corner trims and windows on the back and sides, so no wall is a blank slab
+	var s: Vector3 = node.get_meta("size")
+	var w := s.x - 0.2
+	var trim := color.darkened(0.25)
+	_part(node, Vector3(w + 0.08, 0.45, s.z + 0.08), color.darkened(0.4), Vector3(0, 0.22, 0))
+	for x in [-w / 2.0, w / 2.0]:
+		for z in [-s.z / 2.0, s.z / 2.0]:
+			_part(node, Vector3(0.3, s.y, 0.3), trim, Vector3(x, s.y / 2.0, z))
+	if s.y > 2.6:
+		_part(node, Vector3(w + 0.16, 0.22, s.z + 0.16), trim, Vector3(0, s.y - 0.11, 0))
+	var glass: Variant = Color(0.42, 0.55, 0.68) if def.get("night", false) == false else Util.glow(Color(1.0, 0.85, 0.5), 1.0)
+	var frame := color.lightened(0.55)
+	var y := 1.7
+	while y < s.y - 0.9:
+		# Back wall: the side the top-down camera actually sees for buildings south of the road
+		var cols := maxi(int(w / 2.6), 1)
+		for c in cols:
+			var x := -w / 2.0 + (c + 0.5) * w / cols
+			_framed_window(node, Vector3(x, y, -s.z / 2.0 - 0.02), Vector3(0.9, 1.0, 0.1), glass, frame, PI)
+		# One window per floor on each side wall
+		if s.z > 4.0:
+			for side in [-1.0, 1.0]:
+				_framed_window(node, Vector3(side * (w / 2.0 + 0.02), y, 0), Vector3(0.9, 1.0, 0.1), glass, frame, side * PI / 2.0)
+		y += 2.4
+	# A drainpipe down one back corner
+	_part(node, Vector3(0.12, s.y, 0.12), Color(0.25, 0.25, 0.28), Vector3(w / 2.0 - 0.45, s.y / 2.0, -s.z / 2.0 - 0.1))
+
+
+func _framed_window(node: Node3D, pos: Vector3, size: Vector3, glass, frame: Color, yaw: float) -> void:
+	var holder := Node3D.new()
+	holder.position = pos
+	holder.rotation.y = yaw
+	node.add_child(holder)
+	var f := _part(node, Vector3(size.x + 0.22, size.y + 0.22, 0.06), frame, Vector3.ZERO)
+	f.reparent(holder, false)
+	var g := _part(node, size, glass, Vector3(0, 0, 0.03))
+	g.reparent(holder, false)
+	var bar := _part(node, Vector3(0.06, size.y, 0.04), frame, Vector3(0, 0, 0.08))
+	bar.reparent(holder, false)
+	var sill := _part(node, Vector3(size.x + 0.3, 0.1, 0.22), frame.darkened(0.1), Vector3(0, -size.y / 2.0 - 0.1, 0.08))
+	sill.reparent(holder, false)
+
+
+## Remembers a spot on top of a wall (in the building's own space) for a cat to sit on.
+func add_perch(node: Node3D, local: Vector3) -> void:
+	var p: Vector3 = node.transform * Vector3(local.x, 0, local.z)
+	perches.append(Vector3(p.x, local.y, p.z))
 
 
 func _part(node: Node3D, size: Vector3, color, pos: Vector3) -> MeshInstance3D:
@@ -553,29 +643,87 @@ func _part(node: Node3D, size: Vector3, color, pos: Vector3) -> MeshInstance3D:
 
 func _roof(node: Node3D, color: Color, snow := false) -> void:
 	var s: Vector3 = node.get_meta("size")
+	var tile := Color(0.97, 0.98, 1.0) if snow else color
 	if node.get_meta("low"):
-		_part(node, Vector3(s.x + 0.2, 0.3, s.z + 0.2), Color(0.97, 0.98, 1.0) if snow else color, Vector3(0, s.y + 0.15, 0))
+		# Low buildings by the camera get a shallow tiled roof rather than a flat lid
+		_pitched(node, s, 1.1, tile, snow)
 		return
+	_pitched(node, s, 2.2, tile, snow)
+
+
+func _pitched(node: Node3D, s: Vector3, rise: float, tile: Color, snow: bool) -> void:
 	var p := MeshInstance3D.new()
 	var pm := PrismMesh.new()
-	pm.size = Vector3(s.z + 0.4, 2.2, s.x)
+	pm.size = Vector3(s.z + 0.5, rise, s.x + 0.2)
 	p.mesh = pm
-	p.material_override = Util.mat(Color(0.97, 0.98, 1.0) if snow else color, false, node.get_meta("fade", false))
-	p.position.y = s.y + 1.1
+	p.material_override = Util.mat(tile, false, node.get_meta("fade", false))
+	p.position.y = s.y + rise / 2.0
 	p.rotation.y = PI / 2
 	node.add_child(p)
+	# Rows of tiles: darker strips laid down each slope, and a ridge along the top
+	var slope := atan2(rise, (s.z + 0.5) / 2.0)
+	var run := sqrt(pow((s.z + 0.5) / 2.0, 2) + rise * rise)
+	var rows := maxi(int(run / 0.7), 2)
+	var line := tile.darkened(0.18)
+	for side in [-1.0, 1.0]:
+		for i in range(1, rows):
+			var f := float(i) / rows
+			var strip := _part(node, Vector3(s.x + 0.2, 0.06, 0.08), line,
+				Vector3(0, s.y + rise * (1.0 - f) + 0.03, side * (s.z + 0.5) / 2.0 * f))
+			strip.rotation.x = side * slope
+	_part(node, Vector3(s.x + 0.3, 0.18, 0.3), tile.darkened(0.3), Vector3(0, s.y + rise + 0.02, 0))
+	# Chimney stack with pots on most houses
+	if rng.randf() < 0.75 and s.x > 4.0:
+		var cx := s.x * rng.randf_range(0.2, 0.35) * (1.0 if rng.randf() < 0.5 else -1.0)
+		var brick := Color(0.6, 0.32, 0.25)
+		_part(node, Vector3(0.8, rise + 0.9, 0.7), brick, Vector3(cx, s.y + (rise + 0.9) / 2.0, 0))
+		_part(node, Vector3(0.95, 0.14, 0.85), brick.lightened(0.2), Vector3(cx, s.y + rise + 0.95, 0))
+		for k in [-0.2, 0.2]:
+			node.add_child(Util.cylinder(0.11, 0.3, Color(0.75, 0.4, 0.28), Vector3(cx + k, s.y + rise + 1.15, 0)))
+	# The odd skylight
+	if not snow and rng.randf() < 0.35:
+		var sky := _part(node, Vector3(0.9, 0.06, 0.8), Color(0.45, 0.6, 0.75),
+			Vector3(-s.x * 0.15, s.y + rise * 0.5 + 0.05, (s.z + 0.5) * 0.25))
+		sky.rotation.x = slope
+
+
+## Flat-roof clutter for blocks, hotels and terraces: a parapet, felt, vents and air-con units.
+func _roof_clutter(node: Node3D, color: Color) -> void:
+	var s: Vector3 = node.get_meta("size")
+	var top := s.y
+	var w := s.x - 0.2
+	_part(node, Vector3(w - 0.3, 0.04, s.z - 0.3), Color(0.38, 0.38, 0.4), Vector3(0, top + 0.02, 0))
+	for z in [-s.z / 2.0 + 0.1, s.z / 2.0 - 0.1]:
+		_part(node, Vector3(w, 0.5, 0.2), color.darkened(0.2), Vector3(0, top + 0.25, z))
+	for x in [-w / 2.0 + 0.1, w / 2.0 - 0.1]:
+		_part(node, Vector3(0.2, 0.5, s.z), color.darkened(0.2), Vector3(x, top + 0.25, 0))
+	for i in rng.randi_range(1, 3):
+		var p := Vector3(rng.randf_range(-w * 0.3, w * 0.3), top, rng.randf_range(-s.z * 0.25, s.z * 0.25))
+		match rng.randi() % 3:
+			0:
+				_part(node, Vector3(1.1, 0.7, 0.8), Color(0.82, 0.83, 0.85), p + Vector3(0, 0.35, 0))
+				node.add_child(Util.cylinder(0.3, 0.06, Color(0.3, 0.3, 0.32), p + Vector3(0, 0.73, 0)))
+			1:
+				node.add_child(Util.cylinder(0.18, 0.8, Color(0.6, 0.6, 0.62), p + Vector3(0, 0.4, 0)))
+				node.add_child(Util.cylinder(0.3, 0.1, Color(0.5, 0.5, 0.52), p + Vector3(0, 0.85, 0)))
+			_:
+				_part(node, Vector3(1.4, 0.25, 1.0), Color(0.55, 0.7, 0.85), p + Vector3(0, 0.12, 0))
 
 
 func _windows(node: Node3D, color, rows: int, spacing := 2.2, start := 1.6) -> void:
 	var s: Vector3 = node.get_meta("size")
 	var cols := maxi(int(s.x / 2.4), 1)
+	var frame := Color(0.96, 0.95, 0.92)
 	for row in rows:
 		var y := start + row * spacing
 		if y > s.y - 0.8:
 			break
 		for c in cols:
 			var x := -s.x / 2.0 + (c + 0.5) * s.x / cols
-			_part(node, Vector3(1.0, 1.0, 0.1), color, Vector3(x, y, s.z / 2.0 + 0.02))
+			# Leave a gap for the front door
+			if row == 0 and y < 2.4 and absf(x) < 0.9:
+				continue
+			_framed_window(node, Vector3(x, y, s.z / 2.0 + 0.02), Vector3(1.0, 1.0, 0.1), color, frame, 0.0)
 
 
 func _build_theme() -> void:
@@ -681,6 +829,8 @@ func _suburb_house(r: Rect2, h: float, facing: Vector3, setback: float) -> void:
 	var hedge := rng.randf() < 0.5
 	_part(node, Vector3(s.x - 0.4, 0.9 if hedge else 0.6, 0.7),
 		Color(0.3, 0.55, 0.25) if hedge else Color(0.75, 0.45, 0.35), Vector3(0, 0.45, s.z / 2.0 + setback - 0.4))
+	if not hedge:
+		add_perch(node, Vector3(rng.randf_range(-s.x * 0.3, s.x * 0.3), 0.6, s.z / 2.0 + setback - 0.4))
 
 
 func _shop(r: Rect2, h: float, facing: Vector3, _setback: float) -> void:
@@ -695,6 +845,11 @@ func _shop(r: Rect2, h: float, facing: Vector3, _setback: float) -> void:
 	var awning := _part(node, Vector3(s.x - 0.2, 0.12, 1.4), shop_col.lightened(0.3), Vector3(0, 3.1, front + 0.8))
 	awning.rotation.x = 0.35
 	_windows(node, Color(0.55, 0.7, 0.85), 3, 2.4, 4.6)
+	_roof_clutter(node, c)
+	# Shop door with a handle, and a painted fascia board behind the name
+	_part(node, Vector3(1.0, 2.1, 0.12), shop_col.darkened(0.45), Vector3(s.x / 2.0 - 1.1, 1.05, front + 0.3))
+	_part(node, Vector3(0.08, 0.3, 0.08), Color(0.9, 0.8, 0.3), Vector3(s.x / 2.0 - 1.45, 1.1, front + 0.4))
+	_part(node, Vector3(minf(s.x - 0.8, 5.5), 0.75, 0.12), shop_col.darkened(0.55), Vector3(0, minf(3.7, s.y - 0.4), front + 0.3))
 	var sign := Util.label3d(SHOP_NAMES[rng.randi() % SHOP_NAMES.size()], 64, Color.WHITE, Vector3(0, minf(3.7, s.y - 0.4), front + 0.4))
 	sign.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	sign.no_depth_test = false
@@ -711,7 +866,11 @@ func _hotel(r: Rect2, h: float, facing: Vector3, _setback: float) -> void:
 		var y := row * 2.6 + 0.6
 		if y < s.y - 1.0:
 			_part(node, Vector3(s.x - 0.6, 0.12, 0.8), Color.WHITE, Vector3(0, y, s.z / 2.0 + 0.4))
-	_part(node, Vector3(s.x + 0.2, 0.4, s.z + 0.2), c.darkened(0.3), Vector3(0, s.y + 0.2, 0))
+	_roof_clutter(node, c)
+	# Striped seaside canopy over the front door
+	for i in 5:
+		_part(node, Vector3(0.5, 0.1, 1.4), Color(0.9, 0.2, 0.25) if i % 2 == 0 else Color.WHITE, Vector3(-1.0 + i * 0.5, 2.6, s.z / 2.0 + 0.7))
+	_part(node, Vector3(1.2, 2.2, 0.15), Color(0.2, 0.35, 0.55), Vector3(0, 1.1, s.z / 2.0 + 0.05))
 
 
 func _cottage(r: Rect2, h: float, facing: Vector3, setback: float) -> void:
@@ -724,6 +883,7 @@ func _cottage(r: Rect2, h: float, facing: Vector3, setback: float) -> void:
 	_windows(node, Util.glow(Color(1.0, 0.8, 0.4), 1.2), 1, 2.0, 2.0)
 	_part(node, Vector3(s.x - 0.4, 0.8, 0.4), Color(0.55, 0.4, 0.3), Vector3(0, 0.4, s.z / 2.0 + setback - 0.4))
 	_part(node, Vector3(s.x - 0.3, 0.15, 0.5), Color.WHITE, Vector3(0, 0.85, s.z / 2.0 + setback - 0.4))
+	add_perch(node, Vector3(rng.randf_range(-s.x * 0.3, s.x * 0.3), 0.92, s.z / 2.0 + setback - 0.4))
 
 
 func _tower(r: Rect2, h: float, facing: Vector3, _setback: float) -> void:
@@ -737,6 +897,7 @@ func _tower(r: Rect2, h: float, facing: Vector3, _setback: float) -> void:
 		if rng.randf() < 0.7:
 			_part(node, Vector3(s.x * rng.randf_range(0.4, 0.85), 0.9, 0.1), Util.glow(lit, 1.6), Vector3(rng.randf_range(-0.5, 0.5), floor_y, s.z / 2.0 + 0.03))
 		floor_y += 2.6
+	_roof_clutter(node, c.lightened(0.15))
 	var neon := Color.from_hsv(rng.randf(), 0.8, 1.0)
 	_part(node, Vector3(s.x - 0.4, 0.15, 0.15), Util.glow(neon, 3.0), Vector3(0, 2.6, s.z / 2.0 + 0.1))
 	if rng.randf() < 0.6:

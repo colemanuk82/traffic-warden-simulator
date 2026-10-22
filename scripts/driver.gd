@@ -38,6 +38,7 @@ var shout_timer := 0.5
 var close_call_ready := true
 var walk_t := 0.0
 var pitch := 1.0
+var female := false
 var visual: Node3D
 var shout_label: Label3D
 var stars_label: Label3D
@@ -55,7 +56,8 @@ func _ready() -> void:
 	shape.shape = cap
 	shape.position = Vector3(0, 0.8, 0)
 	add_child(shape)
-	pitch = randf_range(0.9, 1.15)
+	pitch = randf_range(0.96, 1.06)
+	female = not (bodyguard or santa or hp > 1) and randf() < 0.5
 
 	visual = Node3D.new()
 	add_child(visual)
@@ -82,6 +84,11 @@ func _ready() -> void:
 	visual.add_child(Util.box(Vector3(0.18, 0.05, 0.05), Util.mat(dark), Vector3(-0.15, 1.78, 0.37)))
 	visual.add_child(Util.box(Vector3(0.18, 0.05, 0.05), Util.mat(dark), Vector3(0.15, 1.78, 0.37)))
 	visual.add_child(Util.hemisphere(0.42, Util.mat(Color.from_hsv(randf_range(0, 0.1), 0.6, randf_range(0.1, 0.5)), true), Vector3(0, 1.66, -0.04)))
+	if female:
+		# Longer hair down the back and a bit of lipstick so you can tell who's shouting
+		var hair_col := Color.from_hsv(randf_range(0.02, 0.12), randf_range(0.4, 0.8), randf_range(0.15, 0.9))
+		visual.add_child(Util.box(Vector3(0.7, 0.55, 0.22), Util.mat(hair_col, true), Vector3(0, 1.42, -0.26)))
+		visual.add_child(Util.box(Vector3(0.14, 0.04, 0.04), Util.mat(Color(0.85, 0.1, 0.25)), Vector3(0, 1.45, 0.39)))
 	if bodyguard:
 		visual.add_child(Util.box(Vector3(0.6, 0.12, 0.06), Util.mat(Color(0.02, 0.02, 0.02)), Vector3(0, 1.7, 0.38)))
 		visual.add_child(Util.box(Vector3(0.12, 0.3, 0.05), Util.mat(Color(0.9, 0.1, 0.1)), Vector3(0, 1.1, 0.35)))
@@ -132,7 +139,7 @@ func _physics_process(delta: float) -> void:
 				line = ["Hey, that's my bike!", "driver_bike"]
 			shout(line[0])
 			if line[1] != "":
-				Audio.voice(line[1], pitch, 1.0, false)
+				Audio.voice(line[1], pitch, 1.0, false, int(female))
 		if target == null or not is_instance_valid(target):
 			target = main.nearest_warden(global_position)
 		target_pos = target.global_position
@@ -168,7 +175,7 @@ func _physics_process(delta: float) -> void:
 			if d < HIT_RANGE and w.can_be_hit():
 				main.on_warden_hit(self, w)
 				_give_up("Ha! Take that!")
-				Audio.voice("driver_takethat", pitch)
+				Audio.voice("driver_takethat", pitch, 1.0, true, int(female))
 				break
 			elif d < CLOSE_CALL_RANGE and close_call_ready and w.is_diving():
 				close_call_ready = false
@@ -225,7 +232,7 @@ func punched(from: Vector3, knock := 14.0) -> bool:
 	startle_left = 0.0
 	stars_label.visible = true
 	shout(["OW!", "MY NOSE!", "OOOF!", "NOT THE FACE!"][randi() % 4])
-	Audio.voice("punched", pitch)
+	Audio.voice("punched", pitch, 1.0, true, int(female))
 	return true
 
 

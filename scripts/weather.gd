@@ -41,9 +41,13 @@ func setup(weather: String, the_world, follow: Node3D) -> void:
 			_snow(1400, 0.6)
 		"blizzard":
 			_snow(3000, 7.0)
-			_fog(Color(0.85, 0.88, 0.95), 0.02)
+			_fog(Color(0.85, 0.88, 0.95), 0.011)
 		"fog":
-			_fog(main.level.get("fog_color", Color(0.75, 0.77, 0.8)), 0.016)
+			var fog_col: Color = main.level.get("fog_color", Color(0.75, 0.77, 0.8))
+			if main.level.get("night", false) and not main.level.has("fog_color"):
+				# A pale fog at night turns the whole screen grey, so tint it from the night sky instead
+				fog_col = Color(main.level.get("sky", Color(0.1, 0.1, 0.2))).lightened(0.12)
+			_fog(fog_col, 0.0075)
 			sun.light_energy *= 0.7
 		"wind":
 			_leaves()
@@ -69,8 +73,10 @@ func _process(delta: float) -> void:
 	if kind == "storm":
 		flash_timer -= delta
 		if flash_timer <= 0.0:
-			flash_timer = randf_range(5.0, 10.0)
-			_lightning()
+			flash_timer = randf_range(9.0, 16.0)
+			# Let the shift settle before the first strike
+			if main == null or main.elapsed > 20.0:
+				_lightning()
 
 
 func _lightning() -> void:

@@ -291,7 +291,7 @@ func _physics_process(delta: float) -> void:
 func _heckle(w) -> void:
 	var lines: Array = info.lines
 	_say(lines[randi() % lines.size()])
-	Audio.voice(info.voice, randf_range(0.9, 1.1), 1.0, false)
+	Audio.voice(info.voice, randf_range(0.96, 1.05), 1.0, false)
 	main.on_heckled(self, w)
 	if randf() < 0.45:
 		state = "pester"
@@ -310,6 +310,17 @@ func _bump(w) -> void:
 
 
 func _say(text: String) -> void:
+	# Kids knock in little gangs: stack their bubbles instead of printing them on top of each other
+	if not shout_label.has_meta("base_y"):
+		shout_label.set_meta("base_y", shout_label.position.y)
+	var crowd := 0
+	for o in get_tree().get_nodes_in_group("pedestrians"):
+		if o != self and o.get("shout_label") != null and o.shout_label.visible \
+				and o.global_position.distance_to(global_position) < 3.0:
+			crowd += 1
+	if crowd >= 2:
+		return
+	shout_label.position.y = float(shout_label.get_meta("base_y")) + crowd * 0.7
 	shout_label.text = text
 	shout_label.visible = true
 	shout_label.scale = Vector3.ONE * 1.4
@@ -353,7 +364,7 @@ func punched(from: Vector3) -> void:
 	var tw := create_tween()
 	tw.tween_property(self, "global_position", main.world.clamp_move(global_position, global_position + away.normalized() * 2.5), 0.25)
 	_say("OOF!")
-	Audio.voice("punched", randf_range(1.0, 1.2))
+	Audio.voice("punched", randf_range(0.98, 1.06))
 
 
 func can_be_punched() -> bool:

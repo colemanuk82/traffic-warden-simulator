@@ -1,4 +1,7 @@
-"""Generates the release-update audio for Traffic Warden Sim: heavy rock and metal tracks, more music
+"""NOTE: the voice lines this script writes with espeak-ng are replaced by tools/gen_voices.py (Kokoro
+neural voices); run that afterwards. The line tables here are still the script it reads from.
+
+Generates the release-update audio for Traffic Warden Sim: heavy rock and metal tracks, more music
 for the jukebox, the loud car stereos, a dog bark, and new voice lines (women's voices, family-friendly
 heckles, "Hey, that's my bike!" and "chicken man").
 

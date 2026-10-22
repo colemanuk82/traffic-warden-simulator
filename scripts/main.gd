@@ -133,6 +133,17 @@ var collectibles: Array = []  # [node, index]
 var camera_vans: Array = []
 var ped_target := 2
 
+# Pacing: the first career levels add one new thing at a time, and nothing big happens in the
+# opening seconds of a shift, so a new player can learn spotting, ticketing and running first.
+const QUIET_START := 30.0  # no street events, bosses or pickups before this
+const EVENT_GAP := 40.0  # minimum seconds between big moments (street events and bosses)
+var features := {}
+var last_big := -999.0  # elapsed time of the last street event or boss
+var wildlife  # birds and cats
+var training := false  # Training Day: a short coached first shift
+var coach_step := -1
+var coach_t := 0.0
+
 # Christmas Eve: Santa's sleigh flies over and drops presents
 var sleigh_timer := 18.0
 var flyover: Node3D = null
@@ -164,6 +175,23 @@ func _ready() -> void:
 		time_left = WAVE_TIME
 		wave_quota = _wave_quota(1)
 
+	training = Game.training and mode == "career"
+	if training:
+		level = level.duplicate(true)
+		level.name = "Training Day"
+		level.weathers = ["clear"]
+		level.id = "training"
+		time_left = 150.0
+		quota = 3
+		max_cars = 14
+		level.time = 150.0
+	features = _features()
+	if training:
+		features = {"hecklers_full": false, "events": [], "boss": false, "storms": false}
+		heckle_every = 9999.0
+	if not features.hecklers_full:
+		heckle_every *= 2.2
+
 	world = WorldScript.new()
 	world.name = "World"
 	add_child(world)
@@ -185,6 +213,10 @@ func _ready() -> void:
 	camera = players[0].camera
 
 	var options: Array = level.get("weathers", ["clear"])
+	if not features.storms:
+		# Thunder, lightning and blizzards wait until the player has a few levels under their belt
+		var calm := options.filter(func(k: String) -> bool: return not k in ["storm", "blizzard"])
+		options = calm if not calm.is_empty() else ["clear"]
 	weather_kind = options[rng.randi() % options.size()]
 	weather = WeatherScript.new()
 	weather.main = self
@@ -216,13 +248,20 @@ func _ready() -> void:
 		_spawn_car(open_spots[i], true)
 
 	_plan_boss()
-	if mode in ["career", "endless"] and not level.has("event"):
+	if mode in ["career", "endless"] and not level.has("event") and not training:
 		_spawn_collectibles()
 	ped_target = int(level.get("ped_count", {"city": 4, "town": 3}.get(level.theme, 2))) + (1 if level.has("event") else 0) + (1 if two else 0)
+	if not features.hecklers_full:
+		ped_target = 1
+	if training:
+		ped_target = 0
 	for i in ped_target:
 		_spawn_pedestrian()
-	preload("res://scripts/dogwalker.gd").spawn_some(self, 1 if level.theme in ["carpark", "multistorey", "city"] else 3)
-	street_timer = rng.randf_range(25.0, 40.0)
+	wildlife = preload("res://scripts/wildlife.gd").spawn(self)
+	preload("res://scripts/dogwalker.gd").spawn_some(self, 1 if training or level.theme in ["carpark", "multistorey", "city"] else 3)
+	street_timer = rng.randf_range(QUIET_START + 15.0, QUIET_START + 35.0)
+	pickup_timer = rng.randf_range(QUIET_START, QUIET_START + 15.0)
+	heckle_timer = rng.randf_range(8.0, 14.0) if features.hecklers_full else rng.randf_range(25.0, 35.0)
 
 	Audio.play_music(_music())
 	var amb: String = weather.ambience()
@@ -235,6 +274,9 @@ func _ready() -> void:
 		goal = "Most tickets wins!"
 	elif mode == "coop":
 		goal = "Work together: %d tickets" % quota
+	if training:
+		goal = "Learn the ropes: ticket 3 bad parkers"
+		tip = ""
 	hud.banner("%s\n%s%s" % [level.name.to_upper(), goal, ("\n" + tip) if tip != "" else ""], 2.2)
 	_update_hud()
 
@@ -447,10 +489,10 @@ func _spawn_driver(car, target) -> void:
 		Audio.voice("santa_hohoho", d.pitch)
 	elif car.kind == "motorbike":
 		_popup("Hey, that's my BIKE!", Color(1, 0.35, 0.3), d.global_position, 30)
-		Audio.voice("driver_bike", d.pitch)
+		Audio.voice("driver_bike", d.pitch, 1.0, true, int(d.female))
 	else:
 		_popup("Oi! That's MY car!", Color(1, 0.35, 0.3), d.global_position, 30)
-		Audio.voice("driver_oi", d.pitch)
+		Audio.voice("driver_oi", d.pitch, 1.0, true, int(d.female))
 
 
 func _spawn_bodyguards(car) -> void:
@@ -492,7 +534,7 @@ func _process(delta: float) -> void:
 			state = "playing"
 			Audio.sfx("whistle_long")
 			Audio.voice("announce_go")
-			hud.banner("GO!", 0.6)
+			hud.banner("GO!", 0.6, true)
 		return
 	if state == "results":
 		return
@@ -501,7 +543,7 @@ func _process(delta: float) -> void:
 	time_left -= delta
 	if time_left <= 30.0 and not warned_time and mode != "endless":
 		warned_time = true
-		hud.banner("30 SECONDS LEFT!", 1.2)
+		hud.banner("30 SECONDS LEFT!", 1.2, true)
 		Audio.sfx("beep_go")
 	if time_left <= 0.0:
 		time_left = 0.0
@@ -531,6 +573,8 @@ func _process(delta: float) -> void:
 	if get_tree().get_nodes_in_group("pedestrians").size() < ped_target and rng.randf() < delta * 0.1:
 		_spawn_pedestrian()
 
+	if training:
+		_update_coach(delta)
 	_update_boss(delta)
 	_update_flyover(delta)
 	_update_street(delta)
@@ -966,11 +1010,97 @@ func _flash_at(pos: Vector3) -> void:
 
 # ---------------------------------------------------------------- bosses
 
+## What this shift is allowed to throw at the player. Career levels unlock one thing at a time:
+## 1 Pleasant Street: cars, drivers and the ticket needle (plus the odd heckler)
+## 2 Market Crossroads: hecklers in full, pigeons
+## 3 Seaside Prom: runaway trolleys and the ice cream van, bosses
+## 4 Snowy Village onwards: everything, including storms and blizzards
+func _features() -> Dictionary:
+	var index := Levels.index_of(level.id)
+	var all := mode != "career" or index >= 3
+	return {
+		"hecklers_full": all or index >= 1,
+		"events": ["pigeons", "trolley", "icecream"] if (all or index >= 2) else (["pigeons"] if index >= 1 else []),
+		"boss": all or index >= 2,
+		"storms": all,
+	}
+
+
+## True while something big is already going on, or one has only just finished.
+func _busy_for_big_moment() -> bool:
+	if elapsed < QUIET_START or elapsed - last_big < EVENT_GAP:
+		return true
+	if not boss.is_empty() or street_event != null:
+		return true
+	return false
+
+
+## Training Day: one tip at a time, moving on when the player has done it.
+func _update_coach(delta: float) -> void:
+	coach_t += delta
+	var p: Player = players[0]
+	var w = p.warden
+	var next := coach_step
+	match coach_step:
+		-1:
+			if elapsed > 2.5:
+				next = 0
+		0:
+			# Near a bad parker yet?
+			for car in get_tree().get_nodes_in_group("cars"):
+				if car.spot != null and car.is_parked() and car.is_illegal() and not car.ticketed \
+						and car.global_position.distance_to(w.global_position) < 5.0:
+					next = 1
+		1:
+			if p.writing:
+				next = 2
+		2:
+			if p.tickets >= 1:
+				next = 3
+			elif not p.writing and coach_t > 1.0:
+				next = 1
+		3:
+			if coach_t > 7.0 or p.tickets >= 2:
+				next = 4
+		4:
+			if coach_t > 7.0 or p.tickets >= 2:
+				next = 5
+		5:
+			if total_tickets() >= quota:
+				next = 6
+		6:
+			if coach_t > 2.5:
+				time_left = minf(time_left, 0.05)
+				next = 7
+	if next == coach_step:
+		return
+	coach_step = next
+	coach_t = 0.0
+	match coach_step:
+		0:
+			hud.coach("Walk to a car with a red  !  over it: it's parked illegally", "move")
+		1:
+			hud.coach("Stand next to it and press Ticket", "ticket")
+		2:
+			hud.coach("Press Ticket again to stop the needle in the GREEN", "ticket")
+		3:
+			hud.coach("Nice! Drivers come running back. Hold Sprint to leg it!", "sprint")
+		4:
+			hud.coach("Cars inside the white lines with a PAID tag are legal. Leave them be!", "")
+		5:
+			hud.coach("Ticket %d bad parkers to finish your training" % quota, "ticket")
+		6:
+			hud.coach("")
+			hud.banner("TRAINING COMPLETE!\nYou're ready for your first beat", 2.4)
+		7:
+			pass
+
+
 func _plan_boss() -> void:
 	var index := Levels.index_of(level.id)
 	match mode:
 		"career":
-			if index >= 1 or rng.randf() < 0.5:
+			if features.boss:
 				boss_time = level.time * rng.randf_range(0.3, 0.5)
 		"event":
 			boss_time = level.time * rng.randf_range(0.3, 0.45)
@@ -982,7 +1112,10 @@ func _plan_boss() -> void:
 func _update_boss(delta: float) -> void:
 	if boss.is_empty():
 		if boss_time >= 0.0 and elapsed >= boss_time:
+			if _busy_for_big_moment():
+				return
 			boss_time = -1.0
+			last_big = elapsed
 			_start_boss()
 		return
 	if boss_respawn >= 0.0:
@@ -1079,6 +1212,7 @@ func _hit_boss(p: Player, car, damage: int) -> void:
 		car.leave_after(2.5)
 	car.boss = {}
 	boss = {}
+	last_big = elapsed
 	boss_car = null
 
 
@@ -1089,6 +1223,7 @@ func on_car_gone(car) -> void:
 			hud.banner("THE GETAWAY CAR GOT AWAY!", 2.0)
 			Audio.play_music(_music())
 			boss = {}
+			last_big = elapsed
 			boss_car = null
 			return
 		boss.hp_left = car.boss.hp
@@ -1109,15 +1244,20 @@ func _update_street(delta: float) -> void:
 		return
 	street_timer -= delta
 	if street_timer <= 0.0:
-		street_timer = rng.randf_range(35.0, 60.0)
+		if features.events.is_empty() or _busy_for_big_moment():
+			street_timer = 5.0
+			return
+		street_timer = rng.randf_range(45.0, 70.0)
+		last_big = elapsed
 		var e = StreetEventScript.new()
 		e.main = self
-		e.kind = ["pigeons", "trolley", "icecream"][rng.randi() % 3]
+		e.kind = features.events[rng.randi() % features.events.size()]
 		add_child(e)
 		street_event = e
 
 
 func on_street_event_done(e, w, points: int, text: String) -> void:
+	last_big = elapsed
 	if w != null:
 		var p := player_of(w)
 		p.score += points
@@ -1607,6 +1747,8 @@ func blow_whistle(w) -> void:
 			ped.shoo()
 	if street_event != null and is_instance_valid(street_event):
 		street_event.whistled(w)
+	if wildlife != null:
+		wildlife.whistled(w.global_position, w.whistle_range)
 
 
 func _popup(text: String, color: Color, world_pos: Vector3, size := 36) -> void:
@@ -1656,6 +1798,18 @@ func _end_shift() -> void:
 		d.queue_free()
 	Audio.sfx("whistle_long")
 	Audio.voice("announce_shift_over")
+	if training:
+		# No scores or records for the tutorial: back to the menu, ready for Pleasant Street
+		var passed_training := total_tickets() >= quota
+		if passed_training:
+			Game.training_done = true
+		Game.training = false
+		Game.save_game()
+		hud.coach("")
+		if not passed_training:
+			hud.banner("TIME UP!\nTry Training Day again from the menu", 2.4, true)
+		get_tree().create_timer(3.0).timeout.connect(quit_to_menu)
+		return
 
 	var score := total_score()
 	var tickets := total_tickets()

@@ -1,4 +1,7 @@
-"""Generates every music track, sound effect and voice line for Traffic Warden Sim.
+"""NOTE: the voice lines this script writes with espeak-ng are replaced by tools/gen_voices.py (Kokoro
+neural voices); run that afterwards. The line tables here are still the script it reads from.
+
+Generates every music track, sound effect and voice line for Traffic Warden Sim.
 
 Everything is synthesised from scratch (numpy + scipy), and the voices come from
 espeak-ng, so there are no third-party audio files to license.

@@ -75,7 +75,9 @@ func _ready() -> void:
 	_place_camera(1.0)
 
 	_build_ui()
-	if Game.profile_name == "":
+	if not Game.title_seen:
+		_show("title")
+	elif Game.profile_name == "":
 		_ask_profile(1, "main")
 	else:
 		_show("main")
@@ -123,6 +125,11 @@ func _process(delta: float) -> void:
 			figure_root.rotation.y += delta * 0.9
 		else:
 			figure_root.rotation.y = lerp_angle(figure_root.rotation.y, -0.3 + sin(cam_t * 0.7) * 0.25, 1.0 - exp(-3.0 * delta))
+	if screen == "title":
+		var logo: Control = screens.title.get_meta("logo")
+		logo.rotation = sin(cam_t * 1.3) * 0.02
+		logo.scale = Vector2.ONE * (1.0 + sin(cam_t * 2.1) * 0.02)
+		screens.title.get_meta("start").modulate.a = 0.55 + 0.45 * sin(cam_t * 4.0)
 	if title_root and title_root.is_visible_in_tree():
 		title_root.rotation = sin(cam_t * 1.3) * 0.015
 		title_root.scale = Vector2.ONE * (1.0 + sin(cam_t * 2.1) * 0.012)
@@ -196,6 +203,7 @@ func _build_ui() -> void:
 	screens.jukebox = _build_jukebox()
 	screens.credits = _build_credits()
 	screens.profile = _build_profile()
+	screens.title = _build_title()
 	_build_quit_box()
 
 
@@ -285,6 +293,7 @@ func _build_main() -> Control:
 	var w := 252.0
 	var play := _menu_column(cols, "PLAY", Color(0.45, 1.0, 0.5))
 	main_first = _button("Start Shift", play, func() -> void: _pick_levels("career"), w)
+	_button("Training Day", play, _start_training, w)
 	_button("Special Events", play, func() -> void: _show("events"), w)
 	_button("Endless Mode", play, func() -> void: _pick_levels("endless"), w)
 	_button("Two Player", play, func() -> void: _show("twoplayer"), w)
@@ -357,9 +366,10 @@ func _pick_levels(mode: String) -> void:
 	_show("levels")
 
 
-func _start(mode: String, level := -1, event := "") -> void:
+func _start(mode: String, level := -1, event := "", training := false) -> void:
 	Audio.sfx("ui_select")
 	Audio.sfx("whistle")
+	Game.training = training
 	Game.mode = mode
 	Game.current_event = event
 	if level >= 0:
@@ -810,8 +820,8 @@ func _refresh_events() -> void:
 		var open := Game.event_unlocked(e)
 		b.modulate = Color.WHITE if open else Color(0.6, 0.6, 0.65)
 		var best: Dictionary = Game.best.get(e.id, {})
-		var stars := "*".repeat(int(best.get("stars", 0))) + "-".repeat(3 - int(best.get("stars", 0)))
-		info.text = "%s\n%s" % [e.blurb, ("Best %d   Stars [%s]   Base: %s" % [int(best.get("score", 0)), stars, Levels.names()[e.base]]) if open else "LOCKED: earn %d stars" % e.stars_needed]
+		var stars := "%d / 3" % int(best.get("stars", 0))
+		info.text = "%s\n%s" % [e.blurb, ("Best %d   Stars %s   Base: %s" % [int(best.get("score", 0)), stars, Levels.names()[e.base]]) if open else "LOCKED: earn %d stars" % e.stars_needed]
 	grid.get_child(0).grab_focus()
 
 
@@ -990,13 +1000,14 @@ func _refresh_depot(keep_focus := -1) -> void:
 	for u in Career.UPGRADES:
 		var lvl := Game.upgrade_level(u.id)
 		var cost := Game.upgrade_cost(u.id)
-		var text := "%s  [%s]   %s" % [u.name, "#".repeat(lvl) + "-".repeat(u.costs.size() - lvl), ("£%d" % cost) if cost >= 0 else "MAXED"]
-		_depot_row(v, text, u.desc, func() -> void:
+		var text := "%s" % u.name
+		var row := _depot_row(v, text, u.desc, func() -> void:
 			if Game.buy_upgrade(u.id):
 				Audio.sfx("cash")
 				_refresh_depot(_depot_focus())
 			else:
 				Audio.sfx("wrong", 1.0, 0.6), cost >= 0 and Game.wages >= cost)
+		_level_bar(row, lvl, u.costs.size(), ("£%d" % cost) if cost >= 0 else "MAXED")
 	if Game.upgrade_level("bike") > 0:
 		_depot_row(v, "Ride the bike when sprinting:  %s" % ("ON" if Game.settings.get("bike", true) else "OFF"), "Turn the Council Bike on or off.", func() -> void:
 			Game.settings.bike = not Game.settings.get("bike", true)
@@ -1006,11 +1017,12 @@ func _refresh_depot(keep_focus := -1) -> void:
 	v.add_child(_title_label("WEAPONS  (A / Enter: buy or equip for player 1, X / Space: equip for player 2)", 20))
 	for w in Career.WEAPONS:
 		var owned: bool = w.id in Game.weapons_owned
-		var tags := ""
+		var holders := []
 		if Game.weapon == w.id:
-			tags += "  [P1]"
+			holders.append("P1")
 		if Game.weapon2 == w.id:
-			tags += "  [P2]"
+			holders.append("P2")
+		var tags := ("   EQUIPPED: " + " & ".join(holders)) if not holders.is_empty() else ""
 		var text := "%s   %s%s" % [w.name, "OWNED" if owned else "£%d" % w.cost, tags]
 		var row := _depot_row(v, text, w.desc, func() -> void:
 			if w.id in Game.weapons_owned:
@@ -1039,6 +1051,31 @@ func _refresh_depot(keep_focus := -1) -> void:
 func _depot_focus() -> int:
 	var f := get_viewport().gui_get_focus_owner()
 	return depot_rows.find(f)
+
+
+## Upgrade level as a row of filled and empty blocks, with the price beside it.
+func _level_bar(row: Button, lvl: int, max_lvl: int, price: String) -> void:
+	var bar := HBoxContainer.new()
+	bar.position = Vector2(400, 9)
+	bar.add_theme_constant_override("separation", 5)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(bar)
+	for k in max_lvl:
+		var pip := Panel.new()
+		pip.custom_minimum_size = Vector2(30, 24)
+		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(5)
+		sb.bg_color = Color(1, 0.82, 0.15) if k < lvl else Color(0.15, 0.15, 0.22)
+		sb.border_color = Color(0.05, 0.05, 0.1)
+		sb.set_border_width_all(2)
+		pip.add_theme_stylebox_override("panel", sb)
+		bar.add_child(pip)
+	var cost := Label.new()
+	cost.text = "   " + price
+	cost.add_theme_font_size_override("font_size", 21)
+	cost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(cost)
 
 
 func _depot_row(v: VBoxContainer, text: String, desc: String, cb: Callable, affordable: bool) -> Button:
@@ -1114,7 +1151,7 @@ func _refresh_records() -> void:
 	lines.append("")
 	if b.has("level"):
 		var best: Dictionary = Game.best.get(b.id, {})
-		lines.append("Best stars: %s" % ("*".repeat(int(best.get("stars", 0))) + "-".repeat(3 - int(best.get("stars", 0)))))
+		lines.append("Best stars: %d / 3" % int(best.get("stars", 0)))
 		if Game.best_times.has(b.id):
 			var medal: int = Game.best_time_medal(b.id, float(b.level.time))
 			lines.append("Fastest quota: %s   %s" % [Hud._clock(float(Game.best_times[b.id])), ["", "BRONZE medal", "SILVER medal", "GOLD medal"][medal]])
@@ -1206,7 +1243,7 @@ func _build_credits() -> Control:
 		"SOUNDTRACK", "\n".join(tracks), "",
 		"\"Here Comes the Bride\" from the Bridal Chorus, Richard Wagner (1850), public domain",
 		"\"Jingle Bells\", James Lord Pierpont (1857), public domain", "", "",
-		"VOICES", "Synthesised with eSpeak NG", "", "",
+		"VOICES", "Kokoro-82M text-to-speech by hexgrad (Apache License 2.0)", "Generated offline for this game", "", "",
 		"FONTS", "Luckiest Guy by Astigmatic (Apache License 2.0)", "Lilita One by Juan Montoreano (SIL Open Font License 1.1)", "", "",
 		"ENGINE", "Made with Godot Engine", "Copyright " + godot_copyright if godot_copyright != "" else "",
 		"Released under the MIT licence:", "", Engine.get_license_text(), "", "",
@@ -1218,6 +1255,73 @@ func _build_credits() -> Control:
 	back.position = Vector2(40, 588)
 	root.set_meta("first", back)
 	return root
+
+
+# ---------------------------------------------------------------- title screen
+
+## The front door: the logo over the live street, then on to the name and a first training shift.
+func _build_title() -> Control:
+	var root := _screen_root()
+	var logo := Control.new()
+	logo.position = Vector2(330, 120)
+	logo.size = Vector2(620, 260)
+	logo.pivot_offset = Vector2(310, 130)
+	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(logo)
+	root.set_meta("logo", logo)
+	var t1 := _title_label("TRAFFIC", 110)
+	t1.position = Vector2(40, 0)
+	logo.add_child(t1)
+	var t2 := _title_label("WARDEN", 128)
+	t2.position = Vector2(0, 96)
+	logo.add_child(t2)
+	var badge := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.9, 0.15, 0.15)
+	sb.border_color = Color.WHITE
+	sb.set_border_width_all(6)
+	sb.set_corner_radius_all(16)
+	sb.content_margin_left = 20
+	sb.content_margin_right = 20
+	badge.add_theme_stylebox_override("panel", sb)
+	badge.position = Vector2(470, 140)
+	badge.rotation = -0.14
+	badge.add_child(_title_label("SIM", 72, Color.WHITE))
+	logo.add_child(badge)
+	var tag := _title_label("Rules is rules.", 34, Color.WHITE)
+	tag.position = Vector2(0, 410)
+	tag.size = Vector2(1280, 50)
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(tag)
+	var start := Prompt.make("ui_accept", "Press to start", 40, 30)
+	start.position = Vector2(500, 500)
+	root.add_child(start)
+	root.set_meta("start", start)
+	# An invisible button takes the focus, so A, Enter, Space or a click all start the game
+	var go := Button.new()
+	go.flat = true
+	go.size = Vector2(1280, 640)
+	go.modulate.a = 0.0
+	go.pressed.connect(_leave_title)
+	root.add_child(go)
+	root.set_meta("first", go)
+	return root
+
+
+func _leave_title() -> void:
+	if screen != "title":
+		return
+	Game.title_seen = true
+	Audio.sfx("whistle")
+	if Game.profile_name == "":
+		_ask_profile(1, "training")
+	else:
+		_show("main")
+
+
+## A short, calm first shift that teaches spotting, ticketing and running away.
+func _start_training() -> void:
+	_start("career", 0, "", true)
 
 
 # ---------------------------------------------------------------- player profile
@@ -1234,7 +1338,10 @@ func _build_profile() -> Control:
 			Game.profile_name = n
 		Game.save_game()
 		Audio.sfx("cash")
-		_show(profile_next))
+		if profile_next == "training":
+			_start_training()
+		else:
+			_show(profile_next))
 	return root
 
 
@@ -1305,8 +1412,9 @@ func _show(name: String) -> void:
 	tw.tween_property(cur, "position:x", 0.0, 0.22)
 	for c in prompt_bar.get_children():
 		c.queue_free()
-	prompt_bar.add_child(Prompt.make("ui_accept", "Select", 32, 22))
-	if name != "main" and not (name == "profile" and Game.profile_name == ""):
+	if name != "title":
+		prompt_bar.add_child(Prompt.make("ui_accept", "Select", 32, 22))
+	if name != "main" and name != "title" and not (name == "profile" and Game.profile_name == ""):
 		prompt_bar.add_child(Prompt.make("ui_cancel", "Back", 32, 22))
 	if name == "wardrobe":
 		prompt_bar.add_child(Prompt.make("ui_lr", "Change", 32, 22))
@@ -1368,7 +1476,7 @@ func _show(name: String) -> void:
 			var start := Game.profile2_name if profile_for == 2 else Game.profile_name
 			name_entry.set_title("PLAYER 2: WHO'S ON DUTY?" if profile_for == 2 else "WHO'S ON DUTY?")
 			name_entry.open(start)
-		"controls", "twoplayer":
+		"controls", "twoplayer", "title":
 			screens[name].get_meta("first").grab_focus()
 
 
@@ -1379,7 +1487,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_quit()
 			get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("ui_cancel") and screen == "main":
+	if event.is_action_pressed("ui_cancel") and screen in ["main", "title"]:
 		Audio.sfx("ui_back")
 		_ask_quit()
 		get_viewport().set_input_as_handled()
