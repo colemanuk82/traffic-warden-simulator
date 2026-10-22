@@ -11,7 +11,7 @@
   <a href="https://paypal.me/colemanuk82">Buy the dev a cuppa</a>
 </p>
 
-![Pleasant Street on a sunny afternoon](docs/screenshots/pleasant-street.jpg)
+![Title screen](docs/screenshots/title-screen.jpg)
 
 Somebody has to do it. Somebody has to stand in the drizzle with a ticket machine and a high-vis vest while
 Gary from number 42 leaves his hatchback on the double yellows "for literally one minute, mate".
@@ -60,7 +60,17 @@ then **Run anyway**. We promise it only bites drivers.
 - **Endless mode, daily and weekly challenges, Golden Tickets, top-5 high score boards and medals.**
 - **Full Xbox controller support**, menus and all. Plug a pad in whenever you like.
 
+## Screenshots
+
 <table>
+  <tr>
+    <td><img src="docs/screenshots/pleasant-street.jpg" alt="Pleasant Street, a sunny afternoon"></td>
+    <td><img src="docs/screenshots/seaside-prom.jpg" alt="Seaside Prom"></td>
+  </tr>
+  <tr>
+    <td align="center">Pleasant Street. Your first beat. Lovely, isn't it.</td>
+    <td align="center">Seaside Prom. Lovely day for a ticket.</td>
+  </tr>
   <tr>
     <td><img src="docs/screenshots/neon-city-rain.jpg" alt="Neon City in the rain"></td>
     <td><img src="docs/screenshots/spooky-hollow.jpg" alt="Spooky Hollow at Halloween"></td>
@@ -71,19 +81,35 @@ then **Run anyway**. We promise it only bites drivers.
   </tr>
   <tr>
     <td><img src="docs/screenshots/christmas-eve.jpg" alt="Christmas Eve in the town square"></td>
-    <td><img src="docs/screenshots/split-screen-race.jpg" alt="Two player split-screen Ticket Race"></td>
+    <td><img src="docs/screenshots/hilltop-village.jpg" alt="Hilltop Village"></td>
   </tr>
   <tr>
     <td align="center">Christmas Eve. Even Santa isn't above the law.</td>
+    <td align="center">Hilltop Village. Sheep, hay bales and a bus in the bus stop.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/car-park.jpg" alt="SuperSave Car Park, writing a ticket"></td>
+    <td><img src="docs/screenshots/multi-storey.jpg" alt="Multi-Storey car park in the fog"></td>
+  </tr>
+  <tr>
+    <td align="center">SuperSave Car Park. Stop the needle in the green.</td>
+    <td align="center">The Multi-Storey. Ramps, fog and nowhere to hide.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/split-screen-race.jpg" alt="Two player split-screen Ticket Race"></td>
+    <td><img src="docs/screenshots/wardrobe.jpg" alt="Wardrobe"></td>
+  </tr>
+  <tr>
     <td align="center">Ticket Race. Friendships have ended over less.</td>
+    <td align="center">The Wardrobe. Dress for the job you want.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/main-menu.jpg" alt="Main menu"></td>
-    <td><img src="docs/screenshots/seaside-prom.jpg" alt="Seaside Prom"></td>
+    <td><img src="docs/screenshots/single-player.jpg" alt="Single Player menu"></td>
   </tr>
   <tr>
     <td align="center">The main menu, with your warden ID card.</td>
-    <td align="center">Seaside Prom. Lovely day for a ticket.</td>
+    <td align="center">Single Player: shifts, events, endless and more.</td>
   </tr>
 </table>
 

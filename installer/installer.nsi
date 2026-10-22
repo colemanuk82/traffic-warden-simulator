@@ -50,6 +50,15 @@ VIAddVersionKey "LegalCopyright" "colemanuk82"
 
 !insertmacro MUI_LANGUAGE "English"
 
+; Shortcuts for every user on the PC, since the game goes in Program Files
+Function .onInit
+  SetShellVarContext all
+FunctionEnd
+
+Function un.onInit
+  SetShellVarContext all
+FunctionEnd
+
 Section "Traffic Warden Sim (required)" SecMain
   SectionIn RO
   SetOutPath "$INSTDIR"
