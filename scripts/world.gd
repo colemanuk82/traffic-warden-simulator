@@ -59,6 +59,10 @@ func build(level: Dictionary, random: RandomNumberGenerator, with_spots := true)
 		path_rects.append(pr)
 		pave_rects.append(pr)
 		walk_rects.append(pr.intersection(bounds))
+	# Open tarmac you can walk across without any paving drawn (car park lots)
+	for r in def.get("open", []):
+		var o: Rect2 = r
+		walk_rects.append(o.intersection(bounds))
 	_build_environment()
 	_build_ground()
 	_build_roads()
@@ -90,6 +94,25 @@ static func yaw_of(d: Vector3) -> float:
 
 
 # ---------------------------------------------------------------- queries
+
+## The nearest walkable point to p, for spawning safely.
+func nearest_walkable(p: Vector3) -> Vector3:
+	if is_walkable(p):
+		return p
+	var q := Vector2(p.x, p.z)
+	var best := q
+	var best_d := INF
+	for r in walk_rects:
+		var inner := r.grow(-0.6)
+		if not inner.has_area():
+			inner = r
+		var c := Vector2(clampf(q.x, inner.position.x, inner.end.x), clampf(q.y, inner.position.y, inner.end.y))
+		var d := c.distance_to(q)
+		if d < best_d:
+			best_d = d
+			best = c
+	return Vector3(best.x, p.y, best.y)
+
 
 func is_walkable(p: Vector3) -> bool:
 	var q := Vector2(p.x, p.z)

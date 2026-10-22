@@ -255,7 +255,7 @@ func _add_player(i: int, two: bool) -> void:
 		w.weapon_id = Game.weapon
 	add_child(w)
 	var start: Vector2 = level.start + Vector2(i * 3.0, 0)
-	w.position = Vector3(start.x, 0, start.y)
+	w.position = world.nearest_walkable(Vector3(start.x, 0, start.y))
 	p.warden = w
 	var cam := Camera3D.new()
 	cam.fov = 50.0
