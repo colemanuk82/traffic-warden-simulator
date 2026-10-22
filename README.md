@@ -11,6 +11,10 @@
   <a href="https://paypal.me/colemanuk82">Buy the dev a cuppa</a>
 </p>
 
+<p align="center">
+  <img src="docs/promo.gif" width="720" alt="Traffic Warden Sim in action: perfect tickets, punching, puddle splashes, a boss, Santa's sleigh, trick-or-treaters and the 2-player race">
+</p>
+
 <table>
   <tr>
     <td><img src="docs/screenshots/title-screen.jpg" alt="Title screen"></td>
