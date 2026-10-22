@@ -1,0 +1,56 @@
+name: Windows release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NSIS and zip
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis zip
+
+      - name: Install Godot 4.3 and the Windows export templates
+        run: |
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSLO https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q Godot_v4.3-stable_linux.x86_64.zip
+          curl -sSLO https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+          unzip -q Godot_v4.3-stable_export_templates.tpz templates/windows_release_x86_64.exe templates/windows_debug_x86_64.exe \
+            templates/linux_release.x86_64 templates/linux_debug.x86_64 templates/version.txt
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          mv templates/* ~/.local/share/godot/export_templates/4.3.stable/
+          rm Godot_v4.3-stable_export_templates.tpz
+
+      - name: Build the exe, portable zip and installer
+        run: |
+          VERSION="${TAG#v}"
+          GODOT=~/godot/Godot_v4.3-stable_linux.x86_64 tools/build_release.sh "$VERSION"
+
+      - name: Smoke test (the exported game boots and quits)
+        run: timeout 120 build/linux/TrafficWardenSim.x86_64 --headless --quit-after 300
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="docs/release-notes/${TAG}.md"
+          [ -f "$NOTES" ] || NOTES=/dev/null
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/release/* --clobber
+          else
+            gh release create "$TAG" build/release/* --title "Traffic Warden Sim ${TAG}" --notes-file "$NOTES" --target "$GITHUB_SHA"
+          fi
