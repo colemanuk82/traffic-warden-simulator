@@ -41,6 +41,7 @@ var stats_label: Label
 var main_first: Button
 var level_mode := "career"  # which mode the level select is picking for
 var wardrobe_player := 1
+var wardrobe_from := "unlockhub"  # the screen the wardrobe was opened from
 var record_tab := 0
 var depot_rows := []
 var depot_info: Label
@@ -190,6 +191,29 @@ func _build_ui() -> void:
 	ui.add_child(prompt_bar)
 
 	screens.main = _build_main()
+	screens.single = _build_section("SINGLE PLAYER", Color(0.45, 1.0, 0.5), [
+		{"text": "Start Shift", "desc": "Pick a beat and start a shift. Hit the quota before the clock runs out to earn stars, wages and XP. More stars open more streets.", "cb": func() -> void: _pick_levels("career")},
+		{"text": "Training Day", "desc": "A short coached shift: spot a bad parker, write a ticket, leg it. Handy if you're new or rusty.", "cb": _start_training},
+		{"text": "Special Events", "desc": "Bin Strike, Wedding Day, Match Day and the Christmas Market. Unlocked with stars.", "cb": func() -> void: _show("events")},
+		{"text": "Endless Mode", "desc": "One-minute waves with a rising quota. Miss a wave and you're done. How long can you last?", "cb": func() -> void: _pick_levels("endless")},
+		{"text": "Challenges", "desc": "Daily and weekly challenges for bonus wages and XP.", "cb": func() -> void: _show("challenges")},
+		{"text": "Career", "desc": "Your rank, XP and what the next promotion unlocks.", "cb": func() -> void: _show("career")},
+	])
+	screens.unlockhub = _build_section("UNLOCKABLES", YELLOW, [
+		{"text": "Wardrobe", "desc": "Hats, vests, specs and more. Dress your warden up (or down).", "cb": _open_wardrobe.bind(1)},
+		{"text": "The Depot (Shop)", "desc": "Spend your wages on upgrades and weapons, from Turbo Shoes to a wet fish.", "cb": func() -> void: _show("depot")},
+		{"text": "Golden Tickets", "desc": "Three hide on every level. See which ones you've found.", "cb": func() -> void: _show("golden")},
+		{"text": "All Unlockables", "desc": "Every level, event and wardrobe item, and what it takes to unlock it.", "cb": func() -> void: _show("unlocks")},
+		{"text": "Jukebox", "desc": "Play any track from the soundtrack.", "cb": func() -> void: _show("jukebox")},
+	])
+	screens.scores = _build_section("SCOREBOARD", Color(0.55, 0.8, 1.0), [
+		{"text": "High Scores", "desc": "Top five for every level, event, Endless and Co-op.", "cb": func() -> void: _show("records")},
+		{"text": "Stars and Medals", "desc": "Your best stars on every level, plus medals for the fastest quota.", "cb": func() -> void: _show("medals")},
+		{"text": "Your Stats", "desc": "Tickets written, drivers punched, times splashed and more.", "cb": func() -> void: _show("stats")},
+	])
+	screens.golden = _build_info("GOLDEN TICKETS")
+	screens.medals = _build_info("STARS AND MEDALS")
+	screens.stats = _build_info("YOUR STATS")
 	screens.levels = _build_levels()
 	screens.events = _build_events()
 	screens.twoplayer = _build_twoplayer()
@@ -286,37 +310,30 @@ func _build_main() -> Control:
 	tag.position = Vector2(6, 180)
 	title_root.add_child(tag)
 
-	# Three columns: play, your warden, extras
+	# Four sections on the left, extras beside them
 	var cols := HBoxContainer.new()
 	cols.position = Vector2(60, 262)
-	cols.add_theme_constant_override("separation", 18)
+	cols.add_theme_constant_override("separation", 22)
 	root.add_child(cols)
+	var sections := VBoxContainer.new()
+	sections.add_theme_constant_override("separation", 10)
+	cols.add_child(sections)
+	sections.add_child(_title_label("MAIN MENU", 26, Color.WHITE))
+	main_first = _section_button("Single Player", Color(0.45, 1.0, 0.5), sections, func() -> void: _show("single"))
+	_section_button("Multiplayer", Color(1.0, 0.55, 0.35), sections, func() -> void: _show("twoplayer"))
+	_section_button("Unlockables", YELLOW, sections, func() -> void: _show("unlockhub"))
+	_section_button("Scoreboard", Color(0.55, 0.8, 1.0), sections, func() -> void: _show("scores"))
+	var extra := _menu_column(cols, "EXTRAS", Color(0.8, 0.8, 0.85))
 	var w := 252.0
-	var play := _menu_column(cols, "PLAY", Color(0.45, 1.0, 0.5))
-	main_first = _button("Start Shift", play, func() -> void: _pick_levels("career"), w)
-	_button("Training Day", play, _start_training, w)
-	_button("Special Events", play, func() -> void: _show("events"), w)
-	_button("Endless Mode", play, func() -> void: _pick_levels("endless"), w)
-	_button("Two Player", play, func() -> void: _show("twoplayer"), w)
-	_button("Challenges", play, func() -> void: _show("challenges"), w)
-	var you := _menu_column(cols, "YOUR WARDEN", YELLOW)
-	_button("Career", you, func() -> void: _show("career"), w)
-	_button("The Depot (Shop)", you, func() -> void: _show("depot"), w)
-	_button("Wardrobe", you, _open_wardrobe.bind(1), w)
-	_button("Unlockables", you, func() -> void: _show("unlocks"), w)
-	_button("High Scores", you, func() -> void: _show("records"), w)
-	var extra := _menu_column(cols, "EXTRAS", Color(0.55, 0.8, 1.0))
 	var settings_btn := _button("Settings", extra, func() -> void: _show("settings"), w)
 	_button("Controls", extra, func() -> void: _show("controls"), w)
-	_button("Jukebox", extra, func() -> void: _show("jukebox"), w)
 	_button("Change Name", extra, func() -> void: _ask_profile(1, "main"), w)
 	_button("Credits", extra, func() -> void: _show("credits"), w)
 	_button("Clock Off (Quit)", extra, _ask_quit, w)
-	for col in [play, you, extra]:
-		for b in col.get_children():
-			if b is Button:
-				b.custom_minimum_size.y = 46
-				b.add_theme_font_size_override("font_size", 23)
+	for b in extra.get_children():
+		if b is Button:
+			b.custom_minimum_size.y = 46
+			b.add_theme_font_size_override("font_size", 23)
 
 	# Support button, top right. Up from the Extras column reaches it on a controller
 	var support := _button("Support me on PayPal", root, func() -> void: OS.shell_open(PAYPAL_URL), 350)
@@ -373,8 +390,143 @@ func _menu_column(parent: Control, title: String, color: Color) -> VBoxContainer
 	return v
 
 
+func _section_button(text: String, color: Color, parent: Control, cb: Callable) -> Button:
+	var b := _button(text.to_upper(), parent, cb, 420)
+	b.custom_minimum_size.y = 64
+	b.add_theme_font_override("font", Game.font_title)
+	b.add_theme_font_size_override("font_size", 32)
+	for c in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+		b.add_theme_color_override(c, INK)
+	for state in ["normal", "hover", "focus", "pressed"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = color if state == "normal" else color.lightened(0.35)
+		sb.border_color = Color.WHITE if state in ["focus", "hover"] else INK
+		sb.set_border_width_all(5 if state in ["focus", "hover"] else 4)
+		sb.set_corner_radius_all(14)
+		b.add_theme_stylebox_override(state, sb)
+	return b
+
+
+func _build_section(title: String, color: Color, items: Array) -> Control:
+	## A section of the main menu: a column of choices with a description panel that follows the focus.
+	## items: [{"text", "desc", "cb"}]
+	var root := _screen_root()
+	var h := _title_label(title, 54, color)
+	h.position = Vector2(40, 30)
+	root.add_child(h)
+	var v := VBoxContainer.new()
+	v.position = Vector2(60, 120)
+	v.add_theme_constant_override("separation", 10)
+	root.add_child(v)
+	var panel := PanelContainer.new()
+	panel.position = Vector2(500, 120)
+	panel.custom_minimum_size = Vector2(720, 0)
+	root.add_child(panel)
+	var info := Label.new()
+	info.custom_minimum_size = Vector2(680, 0)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD
+	info.add_theme_font_size_override("font_size", 24)
+	panel.add_child(info)
+	items = items + [{"text": "Back", "desc": "Back to the main menu.", "cb": _go_back}]
+	for it in items:
+		var b := _button(it.text, v, it.cb, 400)
+		b.custom_minimum_size.y = 54
+		b.add_theme_font_size_override("font_size", 25)
+		var desc: String = it.desc
+		b.focus_entered.connect(func() -> void: info.text = desc)
+		if not root.has_meta("first"):
+			root.set_meta("first", b)
+	return root
+
+
+func _build_info(title: String) -> Control:
+	## A read-only page (golden tickets, medals, stats) with a Done button
+	var root := _screen_root()
+	_header(root, title)
+	var panel := PanelContainer.new()
+	panel.position = Vector2(40, 110)
+	panel.custom_minimum_size = Vector2(800, 520)
+	root.add_child(panel)
+	var l := Label.new()
+	l.add_theme_font_size_override("font_size", 20)
+	l.custom_minimum_size = Vector2(760, 0)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD
+	panel.add_child(l)
+	root.set_meta("text", l)
+	var back := _button("Done", root, _go_back, 200)
+	back.position = Vector2(900, 560)
+	back.custom_minimum_size.y = 56
+	root.set_meta("first", back)
+	return root
+
+
+func _refresh_golden() -> void:
+	var lines := PackedStringArray()
+	lines.append("Three Golden Tickets hide on every level. Found %d / %d.\n" % [Game.collectible_count(), Levels.count() * 3])
+	for i in Levels.count():
+		var lv := Levels.get_level(i)
+		var n := (Game.collectibles.get(lv.id, []) as Array).size()
+		lines.append("%s:  %d / 3 found%s" % [lv.name, n, "" if Game.level_unlocked(i) else "   (level locked)"])
+	lines.append("\nFind them to unlock wardrobe items.")
+	screens.golden.get_meta("text").text = "\n".join(lines)
+
+
+func _refresh_medals() -> void:
+	var lines := PackedStringArray()
+	lines.append("Stars  %d / %d\n" % [Game.total_stars(), Levels.count() * 3])
+	var boards := _record_boards()
+	for b in boards:
+		if not b.has("level"):
+			continue
+		var best: Dictionary = Game.best.get(b.id, {})
+		var stars := int(best.get("stars", 0))
+		var medal := ""
+		if Game.best_times.has(b.id):
+			medal = ["", "Bronze", "Silver", "Gold"][Game.best_time_medal(b.id, float(b.level.time))]
+		lines.append("%s:  %d / 3 stars%s" % [b.name, stars, ("   %s medal" % medal) if medal != "" else ""])
+	lines.append("\nMedals are for your fastest quota: gold under 45% of the shift, silver 65%, bronze 85%.")
+	screens.medals.get_meta("text").text = "\n".join(lines)
+
+
+func _refresh_stats() -> void:
+	var r := Game.rank()
+	var names := {"tickets": "Tickets written", "punches": "Drivers punched", "perfects": "PERFECT writes",
+		"heckles": "Times heckled", "shifts": "Shifts worked", "close_calls": "Close calls", "bosses": "Bosses beaten",
+		"clamps": "Wheels clamped", "tows": "Cars towed", "cameras": "Camera van tickets", "street_events": "Street events",
+		"pickups": "Pickups grabbed", "splashes": "Times splashed", "zaps": "Lightning near misses", "waves": "Endless waves"}
+	var lines := PackedStringArray()
+	lines.append("%s, %s" % [Game.profile_name, Career.RANKS[r].name])
+	lines.append("XP %d     Wages £%d     Stars %d\n" % [Game.xp, Game.wages, Game.total_stars()])
+	for k in Game.STAT_KEYS:
+		lines.append("%s:  %d" % [names.get(k, k.capitalize()), Game.stat_value(k)])
+	screens.stats.get_meta("text").text = "\n".join(lines)
+
+
+func _back_target() -> String:
+	## Where Back goes from the current screen
+	match screen:
+		"levels":
+			return "twoplayer" if level_mode in ["coop", "race"] else "single"
+		"events", "challenges", "career":
+			return "single"
+		"wardrobe":
+			return wardrobe_from
+		"unlocks", "depot", "jukebox", "golden":
+			return "unlockhub"
+		"records", "medals", "stats":
+			return "scores"
+		"profile":
+			return "twoplayer" if profile_for == 2 else "main"
+	return "main"
+
+
+func _go_back() -> void:
+	_show(_back_target())
+
+
 func _open_wardrobe(player: int) -> void:
 	wardrobe_player = player
+	wardrobe_from = screen
 	_show("wardrobe")
 
 
@@ -563,7 +715,7 @@ func _build_wardrobe() -> Control:
 	h.add_theme_constant_override("separation", 10)
 	v.add_child(h)
 	_button("Randomise", h, _randomise, 255)
-	_button("Done", h, func() -> void: _show("main"), 255)
+	_button("Done", h, _go_back, 255)
 	wardrobe_status = Label.new()
 	wardrobe_status.position = Vector2(620, 560)
 	wardrobe_status.size = Vector2(600, 60)
@@ -784,7 +936,7 @@ func _build_controls() -> Control:
 	back.text = "Done"
 	back.position = Vector2(880, 560)
 	back.custom_minimum_size = Vector2(200, 56)
-	back.pressed.connect(func() -> void: _show("main"))
+	back.pressed.connect(_go_back)
 	root.add_child(back)
 	root.set_meta("first", back)
 	return root
@@ -849,7 +1001,7 @@ func _refresh_events() -> void:
 
 func _build_twoplayer() -> Control:
 	var root := _screen_root()
-	_header(root, "TWO PLAYER")
+	_header(root, "MULTIPLAYER")
 	var v := VBoxContainer.new()
 	v.position = Vector2(60, 120)
 	v.add_theme_constant_override("separation", 10)
@@ -858,7 +1010,7 @@ func _build_twoplayer() -> Control:
 	_button("Ticket Race", v, _pick_levels.bind("race"), 380)
 	_button("Player 2 Wardrobe", v, _open_wardrobe.bind(2), 380)
 	_button("Player 2 Name", v, func() -> void: _ask_profile(2, "twoplayer"), 380)
-	_button("Back", v, func() -> void: _show("main"), 380)
+	_button("Back", v, _go_back, 380)
 	var info_panel := PanelContainer.new()
 	info_panel.position = Vector2(480, 120)
 	info_panel.custom_minimum_size = Vector2(740, 0)
@@ -1146,7 +1298,7 @@ func _build_records() -> Control:
 	back.text = "Done"
 	back.position = Vector2(880, 560)
 	back.custom_minimum_size = Vector2(200, 56)
-	back.pressed.connect(func() -> void: _show("main"))
+	back.pressed.connect(_go_back)
 	root.add_child(back)
 	root.set_meta("back", back)
 	return root
@@ -1210,7 +1362,7 @@ func _build_jukebox() -> Control:
 		b.tooltip_text = style_names.get(t[2], "")
 		b.set_meta("file", file)
 		b.add_theme_font_size_override("font_size", 22)
-	var back := _button("Done", root, func() -> void: _show("main"), 220)
+	var back := _button("Done", root, _go_back, 220)
 	back.position = Vector2(40, 588)
 	root.set_meta("grid", grid)
 	return root
@@ -1271,7 +1423,7 @@ func _build_credits() -> Control:
 	]
 	credits_text.text = "\n".join(lines)
 	clip.add_child(credits_text)
-	var back := _button("Done", root, func() -> void: _show("main"), 220)
+	var back := _button("Done", root, _go_back, 220)
 	back.position = Vector2(40, 588)
 	root.set_meta("first", back)
 	return root
@@ -1496,8 +1648,14 @@ func _show(name: String) -> void:
 			var start := Game.profile2_name if profile_for == 2 else Game.profile_name
 			name_entry.set_title("PLAYER 2: WHO'S ON DUTY?" if profile_for == 2 else "WHO'S ON DUTY?")
 			name_entry.open(start)
-		"controls", "twoplayer", "title":
-			screens[name].get_meta("first").grab_focus()
+		"golden":
+			_refresh_golden()
+		"medals":
+			_refresh_medals()
+		"stats":
+			_refresh_stats()
+	if name in ["controls", "twoplayer", "title", "single", "unlockhub", "scores", "golden", "medals", "stats"]:
+		screens[name].get_meta("first").grab_focus()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1515,12 +1673,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if screen == "profile" and Game.profile_name == "":
 			return  # a name is needed before the first shift
 		Audio.sfx("ui_back")
-		var back := "main"
-		if screen == "levels" and level_mode in ["coop", "race"]:
-			back = "twoplayer"
-		elif screen == "profile":
-			back = "twoplayer" if profile_for == 2 else "main"
-		_show(back)
+		_go_back()
 		get_viewport().set_input_as_handled()
 	elif screen == "wardrobe" and (event.is_action_pressed("tab_next") or event.is_action_pressed("tab_prev")):
 		wardrobe_player = 2 if wardrobe_player == 1 else 1
