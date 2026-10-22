@@ -17,6 +17,21 @@ const SHOUTS := [
 	["Jobsworth!", "driver_jobsworth"], ["Come 'ere!", "driver_comehere"], ["I was only 2 minutes!", "driver_minutes"],
 	["#@%&!", ""],
 ]
+# Excuses for coming back to a ticketed car, mixed in with the shouts
+const EXCUSES := [
+	["I was only a minute!", "driver_x_aminute"], ["My phone didn't work, so I couldn't pay!", "driver_x_phone"],
+	["I couldn't find a space!", "driver_x_space"], ["I park where I like, mate!", "driver_x_wherelike"],
+	["I was only popping to the cash machine!", "driver_x_cashpoint"], ["The machine only takes coins!", "driver_x_coins"],
+	["The parking app crashed!", "driver_x_app"], ["There weren't any signs!", "driver_x_signs"],
+	["I didn't see any yellow lines!", "driver_x_yellow"], ["I was only dropping something off!", "driver_x_droppingoff"],
+	["My hazards were on!", "driver_x_hazards"], ["I was coming straight back!", "driver_x_straightback"],
+	["Everyone else parks here!", "driver_x_everyone"], ["I've parked here for twenty years!", "driver_x_years"],
+	["I was desperate for the loo!", "driver_x_loo"], ["I was only buying a sandwich!", "driver_x_sandwich"],
+	["It's not even my car!", "driver_x_notmine"], ["I'm appealing that!", "driver_x_appeal"],
+	["Have a heart, it's my birthday!", "driver_x_birthday"], ["Do you know who I am?!", "driver_x_whoami"],
+	["I pay my road tax, you know!", "driver_x_roadtax"], ["I was helping my nan with her shopping!", "driver_x_nan"],
+	["I got lost looking for the car park!", "driver_x_lost"], ["I was just getting change!", "driver_x_change"],
+]
 const SANTA_SHOUTS := [["HO HO NO!", "santa_hohoho"], ["Naughty list for YOU!", "santa_naughty"],
 	["I've got a schedule to keep!", "santa_naughty"]]
 
@@ -129,7 +144,7 @@ func _physics_process(delta: float) -> void:
 		shout_timer -= delta
 		if shout_timer <= 0.0:
 			shout_timer = randf_range(1.8, 2.8)
-			var pool: Array = SHOUTS
+			var pool: Array = SHOUTS + EXCUSES
 			if santa:
 				pool = SANTA_SHOUTS
 			elif main.level.has("driver_shouts") and randf() < 0.5:
