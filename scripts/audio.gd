@@ -1,8 +1,22 @@
 extends Node
-## Autoload "Audio": music with crossfades, ambience loops, sound effects and voice lines.
+## Autoload "Audio": music with crossfades, ambience loops, sound effects, voice lines and car stereos.
 ## The .ogg files are read at runtime, so the game runs straight from the folder without importing.
+## Each kind of sound has its own bus (Music, Effects, Voices, Stereos), so the settings sliders
+## turn whole groups up and down.
 
 const SFX_VOICES := 12
+const BUSES := ["Music", "Effects", "Voices", "Stereos"]
+
+## Every track, for the jukebox and the soundtrack setting: [file, title, style]
+const TRACKS := [
+	["menu", "Clocking On", "theme"], ["street", "Double Yellow Ska", "classic"], ["seaside", "Kiss Me Quick", "classic"],
+	["snow", "Snow Chains", "classic"], ["night", "Night Shift", "classic"], ["posh", "Lord of the Manor", "classic"],
+	["boss", "Boss Driver", "classic"], ["endless", "Endless Patrol", "classic"], ["versus", "Ticket Race", "classic"],
+	["wedding", "Here Comes the Bride", "event"], ["matchday", "Match Day", "event"], ["xmas", "Jingle Bells", "event"],
+	["rock", "Heavy Fine", "rock"], ["rock2", "Clamp Boogie", "rock"], ["metal", "Tow Truck of Doom", "rock"],
+	["metal2", "Warden of Steel", "rock"], ["punk", "No Parking (Anarchy)", "rock"], ["synthwave", "Neon Ticket", "classic"],
+]
+const STEREOS := ["radio_rock", "radio_metal", "radio_rave", "radio_bass"]
 
 var _cache := {}
 var _music_a: AudioStreamPlayer
@@ -12,26 +26,34 @@ var _sfx: Array[AudioStreamPlayer] = []
 var _next_sfx := 0
 var _voice: AudioStreamPlayer
 var _current_music := ""
-var _music_vol := 0.7
-var _sfx_vol := 0.9
+var _requested_music := ""
 var _fade_tween: Tween
 var _voice_files := {}
 
 
+func _enter_tree() -> void:
+	for b in BUSES:
+		if AudioServer.get_bus_index(b) < 0:
+			AudioServer.add_bus()
+			AudioServer.set_bus_name(AudioServer.bus_count - 1, b)
+			AudioServer.set_bus_send(AudioServer.bus_count - 1, "Master")
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_music_a = _player()
-	_music_b = _player()
-	_ambience = _player()
-	_voice = _player()
+	_music_a = _player("Music")
+	_music_b = _player("Music")
+	_ambience = _player("Effects")
+	_voice = _player("Voices")
 	for i in SFX_VOICES:
-		_sfx.append(_player())
+		_sfx.append(_player("Effects"))
 	_index_voices()
-	set_volumes(Game.settings.music, Game.settings.sfx)
+	apply_volumes(Game.settings)
 
 
-func _player() -> AudioStreamPlayer:
+func _player(bus: String) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
+	p.bus = bus
 	add_child(p)
 	return p
 
@@ -53,15 +75,15 @@ func _index_voices() -> void:
 	for f in dir.get_files():
 		if not f.ends_with(".ogg"):
 			continue
-		# heckle_3_1.ogg -> group "heckle", driver_oi_0.ogg -> group "driver_oi"
+		# heckle_3_1.ogg -> group "heckle_3", driver_oi_0.ogg -> group "driver_oi"
 		var base := f.get_basename()
 		var group := base
 		var parts := base.split("_")
 		if parts.size() > 1 and parts[-1].is_valid_int():
 			group = "_".join(parts.slice(0, parts.size() - 1))
-		# heckle_3_1.ogg also counts towards the general "heckle" pool
+		# Numbered heckles (heckle_3_1) and the family-friendly ones (heckle_ff_2_0) also join the "heckle" pool
 		var groups := [group]
-		if parts.size() == 3 and parts[0] == "heckle" and parts[1].is_valid_int():
+		if parts[0] == "heckle" and parts.size() >= 3 and (parts[1].is_valid_int() or parts[1] == "ff"):
 			groups.append("heckle")
 		for g in groups:
 			if not _voice_files.has(g):
@@ -69,25 +91,57 @@ func _index_voices() -> void:
 			_voice_files[g].append("res://audio/voice/" + f)
 
 
-func set_volumes(music: float, sfx: float) -> void:
-	_music_vol = music
-	_sfx_vol = sfx
-	if _music_a == null:
-		return
-	var active := _music_a if _music_a.playing else _music_b
-	active.volume_db = _db(_music_vol)
-	_ambience.volume_db = _db(_sfx_vol * 0.5)
+# ---------------------------------------------------------------- volumes
 
-
-func _db(v: float) -> float:
+static func _db(v: float) -> float:
 	return linear_to_db(maxf(v, 0.0001))
 
 
-func play_music(name: String, fade := 1.0) -> void:
-	if name == _current_music:
+## Sets every bus from the settings dictionary (master, music, sfx, voice, stereo: 0..1).
+func apply_volumes(s: Dictionary) -> void:
+	AudioServer.set_bus_volume_db(0, _db(float(s.get("master", 1.0))))
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Music"), _db(float(s.get("music", 0.7))))
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Effects"), _db(float(s.get("sfx", 0.9))))
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Voices"), _db(float(s.get("voice", 0.9))))
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Stereos"), _db(float(s.get("stereo", 0.8))))
+	# Re-pick the level music if the soundtrack style changed
+	if _requested_music != "" and _resolve(_requested_music) != _current_music:
+		var want := _requested_music
+		_requested_music = ""
+		play_music(want)
+
+
+## Older callers: music and effects only.
+func set_volumes(music: float, sfx: float) -> void:
+	var s: Dictionary = Game.settings.duplicate()
+	s.music = music
+	s.sfx = sfx
+	apply_volumes(s)
+
+
+# ---------------------------------------------------------------- music
+
+## Swaps level music for the player's chosen soundtrack style ("classic", "rock" or "mix").
+func _resolve(name: String) -> String:
+	var style: String = Game.settings.get("soundtrack", "classic")
+	if style == "classic" or name in ["menu", "boss", "wedding", "matchday", "xmas"] or name.begins_with("sting"):
+		return name
+	var pool := []
+	for t in TRACKS:
+		if (style == "rock" and t[2] == "rock") or (style == "mix" and t[2] in ["classic", "rock"]):
+			pool.append(t[0])
+	if pool.is_empty():
+		return name
+	return pool[absi(hash(name + str(Game.current_level))) % pool.size()]
+
+
+func play_music(name: String, fade := 1.0, exact := false) -> void:
+	_requested_music = name if not exact else ""
+	var file := name if exact else _resolve(name)
+	if file == _current_music:
 		return
-	_current_music = name
-	var stream := _load("res://audio/music/%s.ogg" % name)
+	_current_music = file
+	var stream := _load("res://audio/music/%s.ogg" % file)
 	if stream is AudioStreamOggVorbis:
 		stream.loop = true
 	var old := _music_a if _music_a.playing else _music_b
@@ -99,14 +153,19 @@ func play_music(name: String, fade := 1.0) -> void:
 	if stream:
 		new.play()
 	_fade_tween = create_tween().set_parallel(true)
-	_fade_tween.tween_property(new, "volume_db", _db(_music_vol), fade)
+	_fade_tween.tween_property(new, "volume_db", 0.0, fade)
 	if old.playing:
 		_fade_tween.tween_property(old, "volume_db", -60.0, fade)
 		_fade_tween.chain().tween_callback(old.stop)
 
 
+func current_music() -> String:
+	return _current_music
+
+
 func stop_music(fade := 0.6) -> void:
 	_current_music = ""
+	_requested_music = ""
 	if _fade_tween:
 		_fade_tween.kill()
 	_fade_tween = create_tween().set_parallel(true)
@@ -126,10 +185,12 @@ func play_ambience(name: String) -> void:
 	if stream is AudioStreamOggVorbis:
 		stream.loop = true
 	_ambience.stream = stream
-	_ambience.volume_db = _db(_sfx_vol * 0.5)
+	_ambience.volume_db = _db(0.5)
 	if stream:
 		_ambience.play()
 
+
+# ---------------------------------------------------------------- effects and voices
 
 func sfx(name: String, pitch := 1.0, volume := 1.0) -> void:
 	var stream := _load("res://audio/sfx/%s.ogg" % name)
@@ -137,9 +198,10 @@ func sfx(name: String, pitch := 1.0, volume := 1.0) -> void:
 		return
 	var p := _sfx[_next_sfx]
 	_next_sfx = (_next_sfx + 1) % _sfx.size()
+	p.bus = "Effects"
 	p.stream = stream
 	p.pitch_scale = pitch
-	p.volume_db = _db(_sfx_vol * volume)
+	p.volume_db = _db(volume)
 	p.play()
 
 
@@ -149,9 +211,10 @@ func sting(name: String) -> void:
 		return
 	var p := _sfx[_next_sfx]
 	_next_sfx = (_next_sfx + 1) % _sfx.size()
+	p.bus = "Music"
 	p.stream = stream
 	p.pitch_scale = 1.0
-	p.volume_db = _db(_music_vol * 1.1)
+	p.volume_db = _db(1.1)
 	p.play()
 
 
@@ -169,5 +232,24 @@ func voice(group: String, pitch := 1.0, volume := 1.0, interrupt := true) -> voi
 		return
 	_voice.stream = _load(files[randi() % files.size()])
 	_voice.pitch_scale = pitch
-	_voice.volume_db = _db(_sfx_vol * volume)
+	_voice.volume_db = _db(volume)
 	_voice.play()
+
+
+## A looping car stereo that plays from a moving car (attach the returned player to it).
+func make_stereo(name := "") -> AudioStreamPlayer3D:
+	if name == "":
+		name = STEREOS[randi() % STEREOS.size()]
+	var stream := _load("res://audio/sfx/%s.ogg" % name)
+	if stream is AudioStreamOggVorbis:
+		stream = stream.duplicate()
+		stream.loop = true
+	var p := AudioStreamPlayer3D.new()
+	p.stream = stream
+	p.bus = "Stereos"
+	p.unit_size = 14.0
+	p.max_distance = 60.0
+	p.volume_db = 4.0
+	p.attenuation_filter_cutoff_hz = 2500.0
+	p.panning_strength = 0.6
+	return p

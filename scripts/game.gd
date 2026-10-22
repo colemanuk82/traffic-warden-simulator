@@ -29,7 +29,13 @@ var outfit2 := {
 	"type": "classic", "skin": "s4", "hair": "spiky", "hair_color": "black",
 	"uniform": "orange", "vest": "utility", "hat": "baseball", "accessory": "none",
 }
-var settings := {"music": 0.7, "sfx": 0.9, "fullscreen": false, "shake": true, "bike": true}
+var settings := {
+	"master": 1.0, "music": 0.7, "sfx": 0.9, "voice": 0.9, "stereo": 0.8, "soundtrack": "classic",
+	"fullscreen": false, "vsync": true, "fps_cap": 0, "quality": 2, "show_fps": false,
+	"shake": true, "camera": "normal", "bike": true,
+}
+const QUALITY_NAMES := ["Low", "Medium", "High"]
+const CAMERA_ZOOM := {"close": 0.82, "normal": 1.0, "far": 1.22}
 var announced := []  # unlock keys already shown to the player
 var xp := 0
 var wages := 0
@@ -42,6 +48,10 @@ var best_times := {}  # level/event id -> seconds taken to meet the quota
 var collectibles := {}  # level id -> [index, ...]
 var challenge_state := {}
 var initials := "AAA"
+var profile_name := ""  # player 1's name, asked for once on the first start
+var profile2_name := ""  # player 2's name, asked for the first time two player is picked
+var _fade: ColorRect
+var _fps_label: Label
 var endless_best := {}  # level id -> best wave
 
 
@@ -66,6 +76,8 @@ func _ready() -> void:
 		announced.append("rank:0")
 	using_pad = not Input.get_connected_joypads().is_empty()
 	Input.joy_connection_changed.connect(_on_joy_changed)
+	_build_overlay()
+	get_viewport().gui_focus_changed.connect(_on_focus_changed)
 	apply_settings()
 
 
@@ -277,18 +289,99 @@ func _style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
 # ---------------------------------------------------------------- settings
 
 func apply_settings() -> void:
+	var headless := DisplayServer.get_name() == "headless"
 	var mode := DisplayServer.WINDOW_MODE_FULLSCREEN if settings.fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
-	if DisplayServer.window_get_mode() != mode and DisplayServer.get_name() != "headless":
+	if DisplayServer.window_get_mode() != mode and not headless:
 		DisplayServer.window_set_mode(mode)
+	if not headless:
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if settings.vsync else DisplayServer.VSYNC_DISABLED)
+	Engine.max_fps = int(settings.fps_cap)
+	var q := int(settings.quality)
+	var vp := get_viewport()
+	vp.msaa_3d = Viewport.MSAA_2X if q >= 2 else Viewport.MSAA_DISABLED
+	vp.scaling_3d_scale = 0.75 if q == 0 else 1.0
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if q == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
+	RenderingServer.directional_shadow_atlas_set_size(4096 if q >= 2 else 2048, true)
+	if _fps_label:
+		_fps_label.visible = settings.show_fps
 	var audio := get_node_or_null("/root/Audio")
 	if audio:
-		audio.set_volumes(settings.music, settings.sfx)
+		audio.apply_volumes(settings)
+
+
+## True when the graphics setting allows sun shadows (the world asks when it builds a level).
+func shadows_on() -> bool:
+	return int(settings.get("quality", 2)) > 0
+
+
+func camera_zoom() -> float:
+	return float(CAMERA_ZOOM.get(settings.get("camera", "normal"), 1.0))
+
+
+# ---------------------------------------------------------------- screen fades, FPS counter and button bounce
+
+func _build_overlay() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 100
+	add_child(layer)
+	_fade = ColorRect.new()
+	_fade.color = Color(0.04, 0.03, 0.08, 0.0)
+	_fade.size = Vector2(1280, 720)
+	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_fade)
+	_fps_label = Label.new()
+	_fps_label.position = Vector2(1170, 2)
+	_fps_label.size = Vector2(106, 24)
+	_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_fps_label.add_theme_font_override("font", font_body)
+	_fps_label.add_theme_font_size_override("font_size", 18)
+	_fps_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_fps_label.add_theme_constant_override("outline_size", 6)
+	_fps_label.visible = false
+	layer.add_child(_fps_label)
+
+
+func _process(_delta: float) -> void:
+	if _fps_label and _fps_label.visible:
+		_fps_label.text = "%d FPS" % Engine.get_frames_per_second()
+
+
+## Fades to black, swaps scene, and fades back in.
+func change_scene(path: String) -> void:
+	if _fade and _fade.mouse_filter == Control.MOUSE_FILTER_STOP:
+		return  # already on its way
+	if _fade == null:
+		get_tree().change_scene_to_file(path)
+		return
+	_fade.mouse_filter = Control.MOUSE_FILTER_STOP
+	var tw := create_tween()
+	tw.tween_property(_fade, "color:a", 1.0, 0.22)
+	tw.tween_callback(func() -> void:
+		get_tree().paused = false
+		get_tree().change_scene_to_file(path))
+	tw.tween_interval(0.08)
+	tw.tween_property(_fade, "color:a", 0.0, 0.3)
+	tw.tween_callback(func() -> void: _fade.mouse_filter = Control.MOUSE_FILTER_IGNORE)
+
+
+func reload_scene() -> void:
+	change_scene(get_tree().current_scene.scene_file_path)
+
+
+func _on_focus_changed(c: Control) -> void:
+	## A little bounce on whatever button the player moves to
+	if not c is Button or not c.is_visible_in_tree():
+		return
+	c.pivot_offset = c.size / 2.0
+	var tw := c.create_tween()
+	tw.tween_property(c, "scale", Vector2.ONE * 1.06, 0.07)
+	tw.tween_property(c, "scale", Vector2.ONE, 0.12)
 
 
 # ---------------------------------------------------------------- progress and unlocks
 
 func total_stars() -> int:
-	## Stars from the six levels only (events and other modes have their own records)
+	## Stars from the levels only (events and other modes have their own records)
 	var n := 0
 	for i in Levels.count():
 		n += int(best.get(Levels.get_level(i).id, {}).get("stars", 0))
@@ -582,6 +675,8 @@ func save_game() -> void:
 	cfg.set_value("records", "collectibles", collectibles)
 	cfg.set_value("records", "challenges", challenge_state)
 	cfg.set_value("records", "initials", initials)
+	cfg.set_value("player", "profile_name", profile_name)
+	cfg.set_value("player", "profile2_name", profile2_name)
 	cfg.set_value("records", "endless_best", endless_best)
 	cfg.save(SAVE_PATH)
 
@@ -615,4 +710,34 @@ func load_game() -> void:
 	collectibles = cfg.get_value("records", "collectibles", {})
 	challenge_state = cfg.get_value("records", "challenges", {})
 	initials = cfg.get_value("records", "initials", "AAA")
+	profile_name = cfg.get_value("player", "profile_name", "")
+	profile2_name = cfg.get_value("player", "profile2_name", "")
 	endless_best = cfg.get_value("records", "endless_best", {})
+
+
+## Wipes all progress (the Reset Progress setting). Settings and profile names are kept.
+func reset_progress() -> void:
+	var keep := settings.duplicate()
+	var n1 := profile_name
+	var n2 := profile2_name
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	for k in STAT_KEYS:
+		stats[k] = 0
+	best = {}
+	announced = []
+	xp = 0
+	wages = 0
+	upgrades = {}
+	weapons_owned = ["fists"]
+	weapon = "fists"
+	weapon2 = "fists"
+	boards = {}
+	best_times = {}
+	collectibles = {}
+	challenge_state = {}
+	endless_best = {}
+	settings = keep
+	profile_name = n1
+	profile2_name = n2
+	announced = unlocked_keys()
+	save_game()

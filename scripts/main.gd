@@ -214,6 +214,7 @@ func _ready() -> void:
 	ped_target = {"city": 4, "town": 3}.get(level.theme, 2) + (1 if level.has("event") else 0) + (1 if two else 0)
 	for i in ped_target:
 		_spawn_pedestrian()
+	preload("res://scripts/dogwalker.gd").spawn_some(self, 1 if level.theme in ["carpark", "multistorey", "city"] else 3)
 	street_timer = rng.randf_range(25.0, 40.0)
 
 	Audio.play_music(_music())
@@ -290,7 +291,8 @@ func _add_player(i: int, two: bool) -> void:
 
 
 func _cam_offset() -> Vector3:
-	return CAMERA_OFFSET_SPLIT if players.size() > 1 or mode in ["coop", "race"] else CAMERA_OFFSET
+	var base := CAMERA_OFFSET_SPLIT if players.size() > 1 or mode in ["coop", "race"] else CAMERA_OFFSET
+	return base * Game.camera_zoom()
 
 
 # ---------------------------------------------------------------- helpers used by cars, drivers and pedestrians
@@ -429,8 +431,12 @@ func _spawn_driver(car, target) -> void:
 		p = car.spot.pos + car.spot.normal * 4.4
 	d.global_position = p
 	car.waiting_for_driver = true
-	_popup("Oi! That's MY car!", Color(1, 0.35, 0.3), d.global_position, 30)
-	Audio.voice("driver_oi", d.pitch)
+	if car.kind == "motorbike":
+		_popup("Hey, that's my BIKE!", Color(1, 0.35, 0.3), d.global_position, 30)
+		Audio.voice("driver_bike", d.pitch)
+	else:
+		_popup("Oi! That's MY car!", Color(1, 0.35, 0.3), d.global_position, 30)
+		Audio.voice("driver_oi", d.pitch)
 
 
 func _spawn_bodyguards(car) -> void:
@@ -1112,13 +1118,13 @@ func _update_pickups(delta: float) -> void:
 		pk.left -= delta
 		var n: Node3D = pk.node
 		n.rotation.y += delta * 2.0
-		n.position.y = 0.6 + sin(elapsed * 3.0 + pk.phase) * 0.15
+		n.position.y = world.height_at(n.position) + 0.6 + sin(elapsed * 3.0 + pk.phase) * 0.15
 		if pk.left <= 0.0:
 			pickups.erase(pk)
 			n.queue_free()
 			continue
 		for w in all_wardens():
-			if w.global_position.distance_to(Vector3(n.position.x, 0, n.position.z)) < 1.3:
+			if w.global_position.distance_to(Vector3(n.position.x, w.global_position.y, n.position.z)) < 1.3:
 				pickups.erase(pk)
 				n.queue_free()
 				shift.pickups += 1
@@ -1176,9 +1182,9 @@ func _update_collectibles(delta: float) -> void:
 	for c in collectibles.duplicate():
 		var n: Node3D = c.node
 		n.rotation.y += delta * 2.5
-		n.position.y = 0.9 + sin(elapsed * 2.0 + c.index) * 0.2
+		n.position.y = world.height_at(n.position) + 0.9 + sin(elapsed * 2.0 + c.index) * 0.2
 		for w in all_wardens():
-			if w.global_position.distance_to(Vector3(n.position.x, 0, n.position.z)) < 1.4:
+			if w.global_position.distance_to(Vector3(n.position.x, w.global_position.y, n.position.z)) < 1.4:
 				collectibles.erase(c)
 				n.queue_free()
 				var found: Array = Game.collectibles.get(level.id, []).duplicate()
@@ -1412,19 +1418,16 @@ func set_paused(paused: bool) -> void:
 
 
 func restart() -> void:
-	get_tree().paused = false
-	get_tree().reload_current_scene()
+	Game.reload_scene()
 
 
 func next_level() -> void:
-	get_tree().paused = false
 	Game.current_level = mini(Game.current_level + 1, Levels.count() - 1)
-	get_tree().reload_current_scene()
+	Game.reload_scene()
 
 
 func quit_to_menu() -> void:
-	get_tree().paused = false
-	get_tree().change_scene_to_file("res://menu.tscn")
+	Game.change_scene("res://menu.tscn")
 
 
 # ---------------------------------------------------------------- end of shift
@@ -1486,12 +1489,13 @@ func _end_shift() -> void:
 	Game.save_game()
 	var has_next: bool = mode == "career" and Game.current_level + 1 < Levels.count() and Game.level_unlocked(Game.current_level + 1)
 	var board_ok: bool = Game.board_qualifies(board_id, score) and mode != "race"
+	var board_place := submit_score(board_id, _board_name()) if board_ok else -1
 	var r := {
 		"mode": mode, "passed": passed, "stars": stars, "tickets": tickets, "quota": quota, "score": score,
 		"new_best": score > prev_best and prev_best > -999999, "perfects": _sum("perfects"), "best_combo": _best_combo(),
 		"close_calls": _sum("close_calls"), "punches": _sum("punches"), "heckles": heckles, "wrong": _sum("wrong"),
 		"hit": _sum("hit"), "unlocks": unlocks, "has_next": has_next, "wave": wave, "challenges": done, "pay": pay,
-		"board": board_id if board_ok else "", "quota_time": quota_time, "new_time": new_time,
+		"board": "", "board_place": board_place, "board_name": _board_name(), "quota_time": quota_time, "new_time": new_time,
 		"medal": Game.best_time_medal(level.id, float(level.time)) if mode in ["career", "event"] else 0,
 		"bosses": shift.bosses, "players": [],
 	}
@@ -1522,10 +1526,17 @@ func _best_combo() -> float:
 	return b
 
 
-## Called by the HUD once initials have been entered for a high score.
-func submit_score(board_id: String, initials: String) -> int:
-	Game.initials = initials
+## The name that goes on the score boards: the player profile(s) set in the menu.
+func _board_name() -> String:
+	var n1: String = Game.profile_name if Game.profile_name != "" else "WARDEN"
+	if players.size() > 1:
+		var n2: String = Game.profile2_name if Game.profile2_name != "" else "PLAYER 2"
+		return "%s & %s" % [n1, n2]
+	return n1
+
+
+func submit_score(board_id: String, name: String) -> int:
 	return Game.board_add(board_id, {
-		"name": initials, "score": total_score(), "level": level.name, "wave": wave,
+		"name": name, "score": total_score(), "level": level.name, "wave": wave,
 		"date": Time.get_date_string_from_system(),
 	})

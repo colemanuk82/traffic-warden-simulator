@@ -68,11 +68,13 @@ func _start_trolley() -> void:
 	if horizontal:
 		var z: float = best.position.y + best.size.y * main.rng.randf_range(0.2, 0.8)
 		global_position = Vector3(best.position.x + 1.0 if forward else best.end.x - 1.0, 0, z)
+		global_position.y = main.world.height_at(global_position)
 		trolley_dir = Vector3.RIGHT if forward else Vector3.LEFT
 		trolley_end = best.size.x - 2.0
 	else:
 		var x: float = best.position.x + best.size.x * main.rng.randf_range(0.2, 0.8)
 		global_position = Vector3(x, 0, best.position.y + 1.0 if forward else best.end.y - 1.0)
+		global_position.y = main.world.height_at(global_position)
 		trolley_dir = Vector3.BACK if forward else Vector3.FORWARD
 		trolley_end = best.size.y - 2.0
 	trolley = Node3D.new()
@@ -152,6 +154,7 @@ func _update_trolley(delta: float) -> void:
 		return
 	trolley_t += delta * 6.5
 	trolley.position = trolley_dir * trolley_t
+	trolley.position.y = main.world.height_at(global_position + trolley.position) - global_position.y
 	trolley.rotation.z = sin(trolley_t * 3.0) * 0.06
 	var tp: Vector3 = trolley.global_position
 	for w in main.all_wardens():

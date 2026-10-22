@@ -19,7 +19,9 @@ const HECKLE_TEXT := ["GET A PROPER JOB!", "OI! GET A PROPER JOB!", "GET A PROPE
 	"JOBSWORTH!", "NOBODY LIKES YOU!", "GET A PROPER JOB, YOU MUPPET!", "GET A PROPER JOB, SUNSHINE!",
 	"GOT NOTHING BETTER TO DO?", "MY NAN PARKS WORSE THAN THAT!", "VULTURE!", "WHO HURT YOU?",
 	"I PAY YOUR WAGES!", "GOT A QUOTA, HAVE YA?", "HI-VIS, LOW IQ!", "GO CATCH REAL CRIMINALS!",
-	"NICE HAT, NAPOLEON!", "GO AND DO SOMETHING USEFUL!", "TYPICAL!", "BOO! BOOOO!"]
+	"NICE HAT, NAPOLEON!", "GO AND DO SOMETHING USEFUL!", "TYPICAL!", "BOO! BOOOO!",
+	"MY NAN'S FASTER THAN YOU!", "LOVELY SHINY JACKET!", "GET A HOBBY!", "SPOILSPORT!", "OFF YOU POP, SLOWCOACH!",
+	"IS THAT A UNIFORM OR YOUR PYJAMAS?", "YOU COULDN'T TICKET A PARKED BUS!", "CHICKEN MAN!", "BET YOU LOVE MONDAYS!"]
 
 var main
 var lane
@@ -73,6 +75,9 @@ var blue_badge := false
 var badge_label: Label3D
 var bus_wait := 0.0
 var bus_stopped_at := -100.0
+var stereo: AudioStreamPlayer3D  # some passing drivers blast their music
+var stereo_label: Label3D
+var stereo_t := 0.0
 
 
 func _ready() -> void:
@@ -105,6 +110,9 @@ func _ready() -> void:
 		speed = DRIVE_SPEED
 	yaw = World.yaw_of(spot.dir if state == "parked" else lane.tangent(s))
 	rotation.y = yaw
+	if spot == null and boss.is_empty() and kind in ["", "sports", "4x4", "whitevan", "motorbike"] and main.has_method("on_car_gone") \
+			and rng.randf() < float(main.level.get("stereo_chance", 0.2)):
+		_add_stereo(rng)
 
 
 func _build_visual(rng: RandomNumberGenerator) -> void:
@@ -423,7 +431,31 @@ func _physics_process(delta: float) -> void:
 		_update_splash(delta)
 	swerve = lerpf(swerve, swerve_target, 1.0 - exp(-4.0 * delta))
 	visual.position.z = swerve
+	rotation.z = main.world.pitch_at(position, _forward())
+	if stereo:
+		_update_stereo(delta)
 	_update_labels(delta)
+
+
+func _add_stereo(rng: RandomNumberGenerator) -> void:
+	stereo = Audio.make_stereo()
+	stereo.position = Vector3(0, 1.0, 0)
+	add_child(stereo)
+	stereo.play(rng.randf() * 4.0)
+	stereo_label = Util.label3d("BOOM BOOM", 44, Color.from_hsv(rng.randf(), 0.6, 1.0), Vector3(0, 3.2, 0))
+	add_child(stereo_label)
+	# Neon underglow
+	var glow := Color.from_hsv(rng.randf(), 0.8, 1.0)
+	body_mesh.add_child(Util.box(Vector3(car_length * 0.8, 0.05, 1.4 if kind != "motorbike" else 0.4), Util.glow(glow, 3.0), Vector3(0, 0.12, 0)))
+
+
+func _update_stereo(delta: float) -> void:
+	stereo_t += delta
+	var beat := absf(sin(stereo_t * PI * 2.3))
+	body_mesh.scale = Vector3(1.0 + beat * 0.03, 1.0 + beat * 0.07, 1.0 + beat * 0.03)
+	driver_head.rotation.z = sin(stereo_t * PI * 2.3) * 0.25
+	stereo_label.scale = Vector3.ONE * (0.9 + beat * 0.35)
+	stereo_label.rotation.z = sin(stereo_t * 3.0) * 0.15
 
 
 func _show_driver(on: bool) -> void:

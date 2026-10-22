@@ -13,7 +13,7 @@ const KNOCK_TIME := 3.0
 # [text bubble, voice group]
 const SHOUTS := [
 	["Oi!", "driver_oi"], ["You what?!", "driver_what"], ["I was only here for a minute!", "driver_minute"],
-	["Where else am I meant to park?!", "driver_where"], ["You're a tosser!", "driver_tosser"],
+	["Where else am I meant to park?!", "driver_where"], ["You're a chicken man!", "driver_chicken"],
 	["Jobsworth!", "driver_jobsworth"], ["Come 'ere!", "driver_comehere"], ["I was only 2 minutes!", "driver_minutes"],
 	["#@%&!", ""],
 ]
@@ -110,6 +110,8 @@ func _physics_process(delta: float) -> void:
 		if shout_timer <= 0.0:
 			shout_timer = randf_range(1.8, 2.8)
 			var line: Array = SHOUTS[randi() % SHOUTS.size()]
+			if line[1] == "driver_oi" and car != null and is_instance_valid(car) and car.kind == "motorbike":
+				line = ["Hey, that's my bike!", "driver_bike"]
 			shout(line[0])
 			if line[1] != "":
 				Audio.voice(line[1], pitch, 1.0, false)
@@ -134,7 +136,7 @@ func _physics_process(delta: float) -> void:
 	velocity = to.normalized() * speed if to.length() > 0.05 else Vector3.ZERO
 	var before := global_position
 	move_and_slide()
-	position.y = 0.0
+	position.y = main.world.height_at(position)
 	if state == "chase":
 		global_position = main.world.clamp_move(before, global_position)
 	if velocity.length() > 0.1:
@@ -169,7 +171,7 @@ func _update_knocked(delta: float) -> void:
 	velocity = knock_vel
 	var before := global_position
 	move_and_slide()
-	global_position = main.world.clamp_move(before, Vector3(global_position.x, 0, global_position.z))
+	global_position = main.world.clamp_move(before, Vector3(global_position.x, main.world.height_at(global_position), global_position.z))
 	visual.position.y = knock_y
 	stars_label.rotation.y += delta * 5.0
 	if knock_left <= 0.0:

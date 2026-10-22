@@ -11,6 +11,8 @@ const Prompt := preload("res://scripts/prompt.gd")
 const Hud := preload("res://scripts/hud.gd")
 const Career := preload("res://scripts/career.gd")
 const WeatherInfo := preload("res://scripts/weather.gd")
+const SettingsPanel := preload("res://scripts/settings_panel.gd")
+const NameEntry := preload("res://scripts/name_entry.gd")
 
 const YELLOW := Color(1.0, 0.86, 0.15)
 const INK := Color(0.06, 0.05, 0.12)
@@ -41,6 +43,15 @@ var wardrobe_player := 1
 var record_tab := 0
 var depot_rows := []
 var depot_info: Label
+var profile_card: Label
+var profile_bar: Control
+var name_entry
+var profile_for := 1  # whose name the profile screen is asking for
+var profile_next := "main"  # where to go after it
+var now_playing: Label
+var credits_text: Label
+var credits_scroll := 0.0
+var quit_box: Control
 
 
 func _ready() -> void:
@@ -64,8 +75,12 @@ func _ready() -> void:
 	_place_camera(1.0)
 
 	_build_ui()
-	_show("main")
-	Audio.play_music("menu")
+	if Game.profile_name == "":
+		_ask_profile(1, "main")
+	else:
+		_show("main")
+	if Audio.current_music() == "" or Audio.current_music() in ["street", "seaside", "snow", "night", "posh"]:
+		Audio.play_music("menu")
 	Audio.play_ambience("birds")
 
 
@@ -108,9 +123,15 @@ func _process(delta: float) -> void:
 			figure_root.rotation.y += delta * 0.9
 		else:
 			figure_root.rotation.y = lerp_angle(figure_root.rotation.y, -0.3 + sin(cam_t * 0.7) * 0.25, 1.0 - exp(-3.0 * delta))
-	if title_root and title_root.visible:
+	if title_root and title_root.is_visible_in_tree():
 		title_root.rotation = sin(cam_t * 1.3) * 0.015
 		title_root.scale = Vector2.ONE * (1.0 + sin(cam_t * 2.1) * 0.012)
+	if screen == "credits" and credits_text:
+		credits_scroll += delta * 42.0
+		var top := 30.0 - credits_scroll
+		if top < -credits_text.size.y:
+			credits_scroll = -510.0  # come back in from the bottom
+		credits_text.position.y = top
 
 
 func _place_camera(delta: float) -> void:
@@ -172,6 +193,10 @@ func _build_ui() -> void:
 	screens.unlocks = _build_unlocks()
 	screens.settings = _build_settings()
 	screens.controls = _build_controls()
+	screens.jukebox = _build_jukebox()
+	screens.credits = _build_credits()
+	screens.profile = _build_profile()
+	_build_quit_box()
 
 
 func _draw_stripes(c: Control) -> void:
@@ -225,15 +250,15 @@ func _header(parent: Control, text: String) -> void:
 func _build_main() -> Control:
 	var root := _screen_root()
 	title_root = Control.new()
-	title_root.position = Vector2(60, 40)
-	title_root.size = Vector2(700, 230)
-	title_root.pivot_offset = Vector2(300, 110)
+	title_root.position = Vector2(60, 28)
+	title_root.size = Vector2(620, 220)
+	title_root.pivot_offset = Vector2(280, 100)
 	title_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(title_root)
-	var t1 := _title_label("TRAFFIC", 96)
+	var t1 := _title_label("TRAFFIC", 84)
 	title_root.add_child(t1)
-	var t2 := _title_label("WARDEN", 110)
-	t2.position = Vector2(0, 84)
+	var t2 := _title_label("WARDEN", 98)
+	t2.position = Vector2(0, 74)
 	title_root.add_child(t2)
 	var badge := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
@@ -244,45 +269,79 @@ func _build_main() -> Control:
 	sb.content_margin_left = 16
 	sb.content_margin_right = 16
 	badge.add_theme_stylebox_override("panel", sb)
-	badge.position = Vector2(470, 108)
+	badge.position = Vector2(420, 96)
 	badge.rotation = -0.12
-	badge.add_child(_title_label("SIM", 64, Color.WHITE))
+	badge.add_child(_title_label("SIM", 56, Color.WHITE))
 	title_root.add_child(badge)
-	var tag := _title_label("Ticket. Dodge. Punch. Repeat.", 30, Color.WHITE)
-	tag.position = Vector2(6, 200)
+	var tag := _title_label("Ticket. Dodge. Punch. Repeat.", 26, Color.WHITE)
+	tag.position = Vector2(6, 180)
 	title_root.add_child(tag)
 
-	var v := GridContainer.new()
-	v.columns = 2
-	v.position = Vector2(60, 282)
-	v.add_theme_constant_override("h_separation", 10)
-	v.add_theme_constant_override("v_separation", 5)
-	root.add_child(v)
-	var w := 270.0
-	main_first = _button("Start Shift", v, func() -> void: _pick_levels("career"), w)
-	_button("Special Events", v, func() -> void: _show("events"), w)
-	_button("Endless Mode", v, func() -> void: _pick_levels("endless"), w)
-	_button("Two Player", v, func() -> void: _show("twoplayer"), w)
-	_button("Challenges", v, func() -> void: _show("challenges"), w)
-	_button("Career", v, func() -> void: _show("career"), w)
-	_button("The Depot (Shop)", v, func() -> void: _show("depot"), w)
-	_button("High Scores", v, func() -> void: _show("records"), w)
-	_button("Wardrobe", v, _open_wardrobe.bind(1), w)
-	_button("Unlockables", v, func() -> void: _show("unlocks"), w)
-	_button("Settings", v, func() -> void: _show("settings"), w)
-	_button("Controls", v, func() -> void: _show("controls"), w)
-	_button("Clock Off (Quit)", v, func() -> void: get_tree().quit(), w)
-	for b in v.get_children():
-		b.custom_minimum_size.y = 44
-		b.add_theme_font_size_override("font_size", 24)
+	# Three columns: play, your warden, extras
+	var cols := HBoxContainer.new()
+	cols.position = Vector2(60, 262)
+	cols.add_theme_constant_override("separation", 18)
+	root.add_child(cols)
+	var w := 252.0
+	var play := _menu_column(cols, "PLAY", Color(0.45, 1.0, 0.5))
+	main_first = _button("Start Shift", play, func() -> void: _pick_levels("career"), w)
+	_button("Special Events", play, func() -> void: _show("events"), w)
+	_button("Endless Mode", play, func() -> void: _pick_levels("endless"), w)
+	_button("Two Player", play, func() -> void: _show("twoplayer"), w)
+	_button("Challenges", play, func() -> void: _show("challenges"), w)
+	var you := _menu_column(cols, "YOUR WARDEN", YELLOW)
+	_button("Career", you, func() -> void: _show("career"), w)
+	_button("The Depot (Shop)", you, func() -> void: _show("depot"), w)
+	_button("Wardrobe", you, _open_wardrobe.bind(1), w)
+	_button("Unlockables", you, func() -> void: _show("unlocks"), w)
+	_button("High Scores", you, func() -> void: _show("records"), w)
+	var extra := _menu_column(cols, "EXTRAS", Color(0.55, 0.8, 1.0))
+	_button("Settings", extra, func() -> void: _show("settings"), w)
+	_button("Controls", extra, func() -> void: _show("controls"), w)
+	_button("Jukebox", extra, func() -> void: _show("jukebox"), w)
+	_button("Change Name", extra, func() -> void: _ask_profile(1, "main"), w)
+	_button("Credits", extra, func() -> void: _show("credits"), w)
+	_button("Clock Off (Quit)", extra, _ask_quit, w)
+	for col in [play, you, extra]:
+		for b in col.get_children():
+			if b is Button:
+				b.custom_minimum_size.y = 46
+				b.add_theme_font_size_override("font_size", 23)
 
+	# The warden's ID card, top right
+	var card := PanelContainer.new()
+	card.position = Vector2(892, 34)
+	card.custom_minimum_size = Vector2(350, 196)
+	root.add_child(card)
+	var cv := VBoxContainer.new()
+	cv.add_theme_constant_override("separation", 4)
+	card.add_child(cv)
+	profile_card = Label.new()
+	profile_card.add_theme_font_size_override("font_size", 21)
+	cv.add_child(profile_card)
+	profile_bar = Control.new()
+	profile_bar.custom_minimum_size = Vector2(310, 16)
+	profile_bar.draw.connect(func() -> void:
+		var r := Game.rank()
+		var base: int = int(Career.RANKS[r].xp)
+		var next_xp: int = int(Career.RANKS[r + 1].xp) if r + 1 < Career.RANKS.size() else base
+		var frac := 1.0 if next_xp <= base else clampf(float(Game.xp - base) / float(next_xp - base), 0.0, 1.0)
+		profile_bar.draw_rect(Rect2(0, 2, 310, 12), Color(0.05, 0.05, 0.1))
+		profile_bar.draw_rect(Rect2(1, 3, 308 * frac, 10), YELLOW))
+	cv.add_child(profile_bar)
 	stats_label = Label.new()
-	stats_label.position = Vector2(760, 520)
-	stats_label.size = Vector2(500, 120)
-	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	stats_label.add_theme_font_size_override("font_size", 26)
-	root.add_child(stats_label)
+	stats_label.add_theme_font_size_override("font_size", 19)
+	cv.add_child(stats_label)
 	return root
+
+
+func _menu_column(parent: Control, title: String, color: Color) -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	parent.add_child(v)
+	var l := _title_label(title, 26, color)
+	v.add_child(l)
+	return v
 
 
 func _open_wardrobe(player: int) -> void:
@@ -292,6 +351,9 @@ func _open_wardrobe(player: int) -> void:
 
 func _pick_levels(mode: String) -> void:
 	level_mode = mode
+	if mode in ["coop", "race"] and Game.profile2_name == "":
+		_ask_profile(2, "levels")
+		return
 	_show("levels")
 
 
@@ -302,7 +364,7 @@ func _start(mode: String, level := -1, event := "") -> void:
 	Game.current_event = event
 	if level >= 0:
 		Game.current_level = level
-	get_tree().change_scene_to_file("res://main.tscn")
+	Game.change_scene("res://main.tscn")
 
 
 func _build_levels() -> Control:
@@ -311,48 +373,49 @@ func _build_levels() -> Control:
 	root.set_meta("header", root.get_child(0))
 	var grid := GridContainer.new()
 	grid.columns = 4
-	grid.position = Vector2(40, 106)
+	grid.position = Vector2(40, 104)
 	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 14)
+	grid.add_theme_constant_override("v_separation", 10)
 	root.add_child(grid)
 	for i in Levels.count():
 		var lv := Levels.get_level(i)
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(289, 212)
+		b.custom_minimum_size = Vector2(289, 140)
 		b.set_meta("level", i)
 		grid.add_child(b)
 		var map := Control.new()
-		map.position = Vector2(10, 10)
-		map.size = Vector2(110, 110)
+		map.position = Vector2(8, 8)
+		map.size = Vector2(72, 72)
 		map.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map.draw.connect(_draw_level_map.bind(map, lv))
 		b.add_child(map)
-		var name := _title_label(lv.name, 24)
-		name.position = Vector2(128, 10)
-		name.size = Vector2(156, 100)
+		var name := _title_label(lv.name, 23)
+		name.position = Vector2(88, 6)
+		name.size = Vector2(194, 74)
 		name.autowrap_mode = TextServer.AUTOWRAP_WORD
+		name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		name.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(name)
 		var stars := Control.new()
-		stars.position = Vector2(10, 126)
-		stars.size = Vector2(270, 44)
+		stars.position = Vector2(8, 82)
+		stars.size = Vector2(274, 30)
 		stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stars.draw.connect(func() -> void:
 			var n := Game.level_stars(i)
 			for s in 3:
-				Hud.draw_star(stars, Vector2(20 + s * 42, 20), 17.0, s < n)
+				Hud.draw_star(stars, Vector2(14 + s * 30, 15), 12.0, s < n)
 			var medal := Game.best_time_medal(lv.id, float(lv.time))
 			if medal > 0:
 				var mc: Color = [Color.WHITE, Color(0.8, 0.5, 0.25), Color(0.8, 0.82, 0.88), Color(1, 0.8, 0.2)][medal]
-				stars.draw_circle(Vector2(160, 20), 15.0, INK)
-				stars.draw_circle(Vector2(160, 20), 12.0, mc)
+				stars.draw_circle(Vector2(112, 15), 11.0, INK)
+				stars.draw_circle(Vector2(112, 15), 9.0, mc)
 			var found: int = (Game.collectibles.get(lv.id, []) as Array).size()
-			stars.draw_string(Game.font_body, Vector2(186, 28), "%d/3" % found, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.8, 0.2) if found == 3 else INK))
+			stars.draw_string(Game.font_body, Vector2(132, 22), "%d/3" % found, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 0.8, 0.2) if found == 3 else INK))
 		b.add_child(stars)
 		var lock := Label.new()
-		lock.position = Vector2(10, 172)
-		lock.size = Vector2(270, 34)
-		lock.add_theme_font_size_override("font_size", 19)
+		lock.position = Vector2(8, 110)
+		lock.size = Vector2(274, 26)
+		lock.add_theme_font_size_override("font_size", 16)
 		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock.set_meta("is_lock", true)
 		b.add_child(lock)
@@ -366,10 +429,10 @@ func _build_levels() -> Control:
 			_update_level_info(i))
 		b.mouse_entered.connect(func() -> void: b.grab_focus())
 	level_info = Label.new()
-	level_info.position = Vector2(40, 562)
-	level_info.size = Vector2(1200, 86)
+	level_info.position = Vector2(40, 556)
+	level_info.size = Vector2(1200, 92)
 	level_info.autowrap_mode = TextServer.AUTOWRAP_WORD
-	level_info.add_theme_font_size_override("font_size", 24)
+	level_info.add_theme_font_size_override("font_size", 22)
 	root.add_child(level_info)
 	root.set_meta("grid", grid)
 	return root
@@ -642,53 +705,12 @@ func _unlock_row(v: VBoxContainer, kind: String, name: String, open: bool, req: 
 func _build_settings() -> Control:
 	var root := _screen_root()
 	_header(root, "SETTINGS")
-	var panel := PanelContainer.new()
-	panel.position = Vector2(40, 110)
-	panel.custom_minimum_size = Vector2(620, 380)
+	var panel = SettingsPanel.new()
+	panel.allow_reset = true
+	panel.position = Vector2(40, 112)
+	panel.closed.connect(func() -> void: _show("main"))
 	root.add_child(panel)
-	var g := GridContainer.new()
-	g.columns = 2
-	g.add_theme_constant_override("h_separation", 30)
-	g.add_theme_constant_override("v_separation", 22)
-	panel.add_child(g)
-	for pair in [["Music volume", "music"], ["Effects & voices", "sfx"]]:
-		var l := Label.new()
-		l.text = pair[0]
-		g.add_child(l)
-		var s := HSlider.new()
-		s.min_value = 0.0
-		s.max_value = 1.0
-		s.step = 0.05
-		s.value = Game.settings[pair[1]]
-		s.custom_minimum_size = Vector2(280, 36)
-		var key: String = pair[1]
-		s.value_changed.connect(func(val: float) -> void:
-			Game.settings[key] = val
-			Game.apply_settings()
-			Audio.sfx("tick")
-			Game.save_game())
-		g.add_child(s)
-		if key == "music":
-			root.set_meta("first", s)
-	for pair in [["Fullscreen", "fullscreen"], ["Screen shake", "shake"]]:
-		var l := Label.new()
-		l.text = pair[0]
-		g.add_child(l)
-		var c := CheckButton.new()
-		c.button_pressed = Game.settings[pair[1]]
-		var key: String = pair[1]
-		c.toggled.connect(func(on: bool) -> void:
-			Game.settings[key] = on
-			Game.apply_settings()
-			Audio.sfx("ui_select")
-			Game.save_game())
-		g.add_child(c)
-	var spacer := Control.new()
-	g.add_child(spacer)
-	var back := Button.new()
-	back.text = "Done"
-	back.pressed.connect(func() -> void: _show("main"))
-	g.add_child(back)
+	root.set_meta("panel", panel)
 	return root
 
 
@@ -805,14 +827,18 @@ func _build_twoplayer() -> Control:
 	root.set_meta("first", _button("Co-op Shift", v, _pick_levels.bind("coop"), 380))
 	_button("Ticket Race", v, _pick_levels.bind("race"), 380)
 	_button("Player 2 Wardrobe", v, _open_wardrobe.bind(2), 380)
+	_button("Player 2 Name", v, func() -> void: _ask_profile(2, "twoplayer"), 380)
 	_button("Back", v, func() -> void: _show("main"), 380)
+	var info_panel := PanelContainer.new()
+	info_panel.position = Vector2(480, 120)
+	info_panel.custom_minimum_size = Vector2(740, 0)
+	root.add_child(info_panel)
 	var info := Label.new()
-	info.position = Vector2(60, 400)
-	info.size = Vector2(700, 240)
+	info.custom_minimum_size = Vector2(700, 0)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	info.add_theme_font_size_override("font_size", 22)
 	info.text = "Split-screen for two wardens.\nCO-OP: one shared quota and a team score.\nTICKET RACE: whoever writes the most tickets wins.\n\nWith two controllers, each player gets one. With one controller, player 1 uses the keyboard and player 2 the pad. With none, player 2 uses the arrow keys and the number pad (1 ticket, 2 punch, 3 whistle, 0 sprint, . dive, 4 gadget)."
-	root.add_child(info)
+	info_panel.add_child(info)
 	return root
 
 
@@ -1101,6 +1127,167 @@ func _refresh_records() -> void:
 	screens.records.get_meta("back").grab_focus()
 
 
+# ---------------------------------------------------------------- jukebox
+
+func _build_jukebox() -> Control:
+	var root := _screen_root()
+	_header(root, "JUKEBOX")
+	now_playing = _title_label("", 26, Color.WHITE)
+	now_playing.position = Vector2(44, 96)
+	root.add_child(now_playing)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.position = Vector2(40, 146)
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 8)
+	root.add_child(grid)
+	var style_names := {"theme": "Theme", "classic": "Classic", "event": "Special event", "rock": "Rock & Metal"}
+	for t in Audio.TRACKS:
+		var file: String = t[0]
+		var b := _button("", grid, func() -> void:
+			Audio.play_music(file, 0.6, true)
+			_refresh_jukebox(), 390)
+		b.custom_minimum_size.y = 50
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.text = "  %s" % t[1]
+		b.tooltip_text = style_names.get(t[2], "")
+		b.set_meta("file", file)
+		b.add_theme_font_size_override("font_size", 22)
+	var back := _button("Done", root, func() -> void: _show("main"), 220)
+	back.position = Vector2(40, 588)
+	root.set_meta("grid", grid)
+	return root
+
+
+func _refresh_jukebox() -> void:
+	var cur := Audio.current_music()
+	var title := "nothing"
+	for b in screens.jukebox.get_meta("grid").get_children():
+		var on: bool = b.get_meta("file") == cur
+		b.modulate = Color(1, 0.95, 0.5) if on else Color.WHITE
+		if on:
+			title = b.text.strip_edges()
+	now_playing.text = "NOW PLAYING:  " + title.to_upper()
+
+
+# ---------------------------------------------------------------- credits
+
+func _build_credits() -> Control:
+	var root := _screen_root()
+	_header(root, "CREDITS")
+	var clip := Control.new()
+	clip.position = Vector2(300, 100)
+	clip.size = Vector2(680, 540)
+	clip.clip_contents = true
+	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(clip)
+	var bg := ColorRect.new()
+	bg.color = Color(0.03, 0.03, 0.08, 0.7)
+	bg.size = clip.size
+	clip.add_child(bg)
+	credits_text = Label.new()
+	credits_text.size = Vector2(680, 0)
+	credits_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	credits_text.autowrap_mode = TextServer.AUTOWRAP_WORD
+	credits_text.add_theme_font_size_override("font_size", 22)
+	var tracks := []
+	for t in Audio.TRACKS:
+		tracks.append(t[1])
+	var godot_copyright := ""
+	for part in Engine.get_copyright_info():
+		if part.name in ["Godot Engine", "Godot"]:
+			for p in part.parts:
+				godot_copyright = ", ".join(p.copyright)
+	var lines := [
+		"TRAFFIC WARDEN SIM", "", "",
+		"CREATED BY", "Craig", "", "",
+		"GAME DESIGN", "Craig", "",
+		"PROGRAMMING, ART, MUSIC AND SOUND", "Built in code with Claude (Anthropic)", "", "",
+		"SOUNDTRACK", "\n".join(tracks), "",
+		"\"Here Comes the Bride\" from the Bridal Chorus, Richard Wagner (1850), public domain",
+		"\"Jingle Bells\", James Lord Pierpont (1857), public domain", "", "",
+		"VOICES", "Synthesised with eSpeak NG", "", "",
+		"FONTS", "Luckiest Guy by Astigmatic (Apache License 2.0)", "Lilita One by Juan Montoreano (SIL Open Font License 1.1)", "", "",
+		"ENGINE", "Made with Godot Engine", "Copyright " + godot_copyright if godot_copyright != "" else "",
+		"Released under the MIT licence:", "", Engine.get_license_text(), "", "",
+		"THANKS FOR PLAYING", "", "Now get back out there. Those yellow lines won't enforce themselves.",
+	]
+	credits_text.text = "\n".join(lines)
+	clip.add_child(credits_text)
+	var back := _button("Done", root, func() -> void: _show("main"), 220)
+	back.position = Vector2(40, 588)
+	root.set_meta("first", back)
+	return root
+
+
+# ---------------------------------------------------------------- player profile
+
+func _build_profile() -> Control:
+	var root := _screen_root()
+	name_entry = NameEntry.new()
+	name_entry.position = Vector2(260, 110)
+	root.add_child(name_entry)
+	name_entry.submitted.connect(func(n: String) -> void:
+		if profile_for == 2:
+			Game.profile2_name = n
+		else:
+			Game.profile_name = n
+		Game.save_game()
+		Audio.sfx("cash")
+		_show(profile_next))
+	return root
+
+
+## Asks for a player's name, then goes on to the screen called next.
+func _ask_profile(player: int, next: String) -> void:
+	profile_for = player
+	profile_next = next
+	_show("profile")
+
+
+# ---------------------------------------------------------------- quit
+
+func _build_quit_box() -> void:
+	quit_box = ColorRect.new()
+	quit_box.color = Color(0, 0, 0, 0.6)
+	quit_box.size = Vector2(1280, 720)
+	quit_box.visible = false
+	ui.add_child(quit_box)
+	var panel := PanelContainer.new()
+	panel.position = Vector2(390, 250)
+	panel.custom_minimum_size = Vector2(500, 200)
+	quit_box.add_child(panel)
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 18)
+	panel.add_child(v)
+	var q := _title_label("Clock off for the day?", 38)
+	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(q)
+	var h := HBoxContainer.new()
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.add_theme_constant_override("separation", 20)
+	v.add_child(h)
+	var yes := _button("Yes, home time", h, func() -> void:
+		Game.save_game()
+		get_tree().quit(), 210)
+	var no := _button("No, keep going", h, _close_quit, 210)
+	quit_box.set_meta("no", no)
+	quit_box.set_meta("yes", yes)
+
+
+func _ask_quit() -> void:
+	quit_box.visible = true
+	quit_box.modulate.a = 0.0
+	create_tween().tween_property(quit_box, "modulate:a", 1.0, 0.15)
+	(quit_box.get_meta("no") as Button).grab_focus()
+
+
+func _close_quit() -> void:
+	quit_box.visible = false
+	main_first.grab_focus()
+
+
 # ---------------------------------------------------------------- navigation
 
 func _show(name: String) -> void:
@@ -1109,10 +1296,17 @@ func _show(name: String) -> void:
 	screen = name
 	for k in screens:
 		screens[k].visible = k == name
+	# Slide the new screen in
+	var cur: Control = screens[name]
+	cur.modulate.a = 0.0
+	cur.position.x = 40.0
+	var tw := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(cur, "modulate:a", 1.0, 0.18)
+	tw.tween_property(cur, "position:x", 0.0, 0.22)
 	for c in prompt_bar.get_children():
 		c.queue_free()
 	prompt_bar.add_child(Prompt.make("ui_accept", "Select", 32, 22))
-	if name != "main":
+	if name != "main" and not (name == "profile" and Game.profile_name == ""):
 		prompt_bar.add_child(Prompt.make("ui_cancel", "Back", 32, 22))
 	if name == "wardrobe":
 		prompt_bar.add_child(Prompt.make("ui_lr", "Change", 32, 22))
@@ -1123,8 +1317,10 @@ func _show(name: String) -> void:
 	match name:
 		"main":
 			var rk: Dictionary = Career.RANKS[Game.rank()]
-			stats_label.text = "%s\nStars  %d / %d     Wages  £%d\nGolden Tickets  %d / %d" % [rk.name.to_upper(), Game.total_stars(),
+			profile_card.text = "WARDEN ID\n%s\nRank: %s" % [Game.profile_name.to_upper(), rk.name]
+			stats_label.text = "Stars  %d / %d     Wages  £%d\nGolden Tickets  %d / %d" % [Game.total_stars(),
 				Levels.count() * 3, Game.wages, Game.collectible_count(), Levels.count() * 3]
+			profile_bar.queue_redraw()
 			main_first.grab_focus()
 		"levels":
 			var header: Label = screens.levels.get_meta("header")
@@ -1155,14 +1351,48 @@ func _show(name: String) -> void:
 			depot_rows[0].grab_focus()
 		"records":
 			_refresh_records()
-		"settings", "controls", "twoplayer":
+		"settings":
+			screens.settings.get_meta("panel").open()
+		"jukebox":
+			_refresh_jukebox()
+			var grid: GridContainer = screens.jukebox.get_meta("grid")
+			var pick: Control = grid.get_child(0)
+			for b in grid.get_children():
+				if b.get_meta("file") == Audio.current_music():
+					pick = b
+			pick.grab_focus()
+		"credits":
+			credits_scroll = 0.0
+			screens.credits.get_meta("first").grab_focus()
+		"profile":
+			var start := Game.profile2_name if profile_for == 2 else Game.profile_name
+			name_entry.set_title("PLAYER 2: WHO'S ON DUTY?" if profile_for == 2 else "WHO'S ON DUTY?")
+			name_entry.open(start)
+		"controls", "twoplayer":
 			screens[name].get_meta("first").grab_focus()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") and screen != "main":
+	if quit_box and quit_box.visible:
+		if event.is_action_pressed("ui_cancel"):
+			Audio.sfx("ui_back")
+			_close_quit()
+			get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("ui_cancel") and screen == "main":
 		Audio.sfx("ui_back")
-		_show("twoplayer" if screen == "levels" and level_mode in ["coop", "race"] else "main")
+		_ask_quit()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_cancel"):
+		if screen == "profile" and Game.profile_name == "":
+			return  # a name is needed before the first shift
+		Audio.sfx("ui_back")
+		var back := "main"
+		if screen == "levels" and level_mode in ["coop", "race"]:
+			back = "twoplayer"
+		elif screen == "profile":
+			back = "twoplayer" if profile_for == 2 else "main"
+		_show(back)
 		get_viewport().set_input_as_handled()
 	elif screen == "wardrobe" and (event.is_action_pressed("tab_next") or event.is_action_pressed("tab_prev")):
 		wardrobe_player = 2 if wardrobe_player == 1 else 1
