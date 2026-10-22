@@ -1,7 +1,7 @@
 # Traffic Warden Sim
 
 A top-down cartoon traffic warden game for Godot 4.3+. Climb the ranks from Trainee Warden to Chief Parking
-Enforcer across ten levels (including Halloween and Christmas Eve) and four special events, take on boss drivers, play endless mode or split-screen
+Enforcer across a dozen levels (including Halloween and Christmas Eve) and four special events, take on boss drivers, play endless mode or split-screen
 with a mate, and spend your wages on gadgets, upgrades, weapons and a wardrobe full of unlockables.
 
 ## Quick start (no setup)
@@ -9,6 +9,15 @@ with a mate, and spend your wages on gadgets, upgrades, weapons and a wardrobe f
 2. Double-click that icon to play. It finds Godot 4.3+ on your PC, or downloads a portable copy into the `godot` folder here on the first run (about 55 MB).
 
 You can also double-click **Play Traffic Warden.bat** directly. An Xbox controller works everywhere, including all the menus; plug it in before or after starting.
+
+The first time you play, the game asks for your name. It goes on your warden ID card and on the high score
+boards, so you are never asked again after a shift. Player 2 is asked once, the first time you start a two
+player game. Change either name from **Change Name** on the main menu or **Player 2 Name** on the Two Player screen.
+
+## Menus and settings
+- **Main menu**: Play (shifts, events, endless, two player, challenges), Your Warden (career, shop, wardrobe, unlockables, high scores) and Extras (settings, controls, jukebox, change name, credits, quit).
+- **Settings** (main menu and pause menu): master, music, effects, voices and car stereo volumes; soundtrack (Classic, Rock & Metal, or a shuffle of both); fullscreen, V-Sync, frame rate limit, graphics quality (Low / Medium / High), FPS counter, screen shake and camera distance. Reset Progress (press twice) is on the main menu version only.
+- **Jukebox**: play any track from the soundtrack.
 
 ## Controls
 | Action | Keyboard / mouse | Xbox controller |
@@ -62,6 +71,8 @@ and the brolly keeps you dry from puddle splashes.
 - **Shortcuts**: footpaths and walkways cut between the roads.
 - **Halloween (Spooky Hollow)**: kids in costumes come trick-or-treating. If you have a sweet they take it and give you a treat (points, speed, extra time); with no sweets left you get tricked (egged, toilet papered, laces tied or a jump scare). Pick up pumpkin buckets for more sweets, whistle to send kids away, and ticket the Haunted Hearse for a bonus. Drivers shout "It's Halloween, give us a break!".
 - **Christmas Eve**: Santa's sleigh flies over dropping presents (most are good, some are lumps of coal) and sometimes lands on the yellows: ticket it for +250, then run from Santa. Carol singers make you sing along, elves put you on the naughty list, and drivers shout "Come on, it's Christmas!".
+- **Neighbourhoods**: every street is lined with houses and shops, with parks of mown grass, trees, blossom, flower beds, benches and duck ponds. Locals walk their dogs (the dogs bark at you; you can't ticket a dog). On the Halloween and Christmas levels the houses and parks are decorated.
+- **Car stereos**: some passing cars blast rock, metal, rave or bass as they go by, bouncing on their suspension.
 
 ## Levels
 Unlock each level with stars (1 star = quota met, 2 and 3 stars for high scores).
@@ -75,9 +86,11 @@ Unlock each level with stars (1 star = quota met, 2 and 3 stars for high scores)
 | Neon City | Grid of four roads | Night time, neon signs, street lights | 9 |
 | Posh Avenue | Zig-zag | Golden hour mansions and fountains | 12 |
 | SuperSave Car Park | Supermarket car park | Trolley bays, speed bumps, the store | 14 |
-| Multi-Storey | Level 3 of a concrete car park | Night, pillars, strip lights | 17 |
+| Multi-Storey | Three split-level decks and the roof, joined by ramps | Concrete, pillars, strip lights, roof lamps | 17 |
 | Spooky Hollow | Long street with a lane looping round a graveyard | Halloween night, haunted houses, pumpkins | 6 |
 | Christmas Eve | Crossroads by the town square | Snow, fairy lights, giant tree, Santa's grotto | 9 |
+| Hilltop Village | Winding road over rolling hills | Stone cottages, sheep, hay bales | 26 |
+| Steep Street | Two roads up a steep hill and a cross street | Pastel terraces | 29 |
 
 Each shift rolls the weather from that level's list: sunny, rain (slippery), thunderstorm (slippery, lightning),
 snow (slower), blizzard, fog or blustery wind.
@@ -98,16 +111,19 @@ but are not saved; the Unlockables screen lists what each one needs (stars, tick
 Progress saves automatically to `%APPDATA%\Godot\app_userdata\Traffic Warden Sim\save.cfg`.
 
 ## Audio
-All music, sound effects and voices were generated for this game by `tools/gen_audio.py`
-(synthesised with numpy/scipy, voices from espeak-ng), so there are no third-party audio licences.
-Re-run that script to regenerate them.
+All music, sound effects and voices were generated for this game by `tools/gen_audio.py` and
+`tools/gen_audio_extra.py` (the rock and metal tracks, car stereos, dog barks, women's voices and the
+family-friendly heckles), synthesised with numpy/scipy, voices from espeak-ng. "Here Comes the Bride" (Wagner, 1850)
+and "Jingle Bells" (Pierpont, 1857) are public domain melodies. Re-run the scripts to regenerate everything.
 
 ## Credits
 - Fonts: Luckiest Guy by Astigmatic (Apache License 2.0) and Lilita One by Juan Montoreano (SIL Open Font License 1.1). Licence files are in `fonts/`.
+- Engine: Godot Engine (MIT licence). The full credits, including Godot's licence text, are on the in-game Credits screen.
 - Everything else (code, models built from primitives, audio) was made for this project.
 
 ## Tuning
-Level quotas, timers, star scores and weather lists are in `scripts/levels.gd`. Scoring is at the top of
+Level quotas, timers, star scores, weather lists and hills (`terrain`) are in `scripts/levels.gd`; the hill
+shapes are in `scripts/terrain.gd` and the houses, shops and parks in `scripts/scenery.gd`. Scoring is at the top of
 `scripts/main.gd`; movement in `scripts/warden.gd`; cars in `scripts/car.gd`; drivers in `scripts/driver.gd`;
 unlock requirements in `scripts/catalogue.gd`; ranks, gadgets, upgrades, weapons, events and bosses in
 `scripts/career.gd`; challenges in `scripts/challenges.gd`.

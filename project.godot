@@ -6,7 +6,10 @@ config_version=5
 [application]
 
 config/name="Traffic Warden Sim"
+config/version="1.0.0"
 run/main_scene="res://menu.tscn"
+boot_splash/bg_color=Color(0.06, 0.05, 0.12, 1)
+boot_splash/show_image=false
 config/features=PackedStringArray("4.3", "Forward Plus")
 
 [autoload]

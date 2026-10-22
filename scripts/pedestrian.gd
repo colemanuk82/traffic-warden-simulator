@@ -280,7 +280,7 @@ func _physics_process(delta: float) -> void:
 	velocity = dir * speed
 	var before := global_position
 	move_and_slide()
-	position.y = 0.0
+	position.y = main.world.height_at(position)
 	global_position = main.world.clamp_move(before, global_position)
 	if velocity.length() > 0.1:
 		visual.rotation.y = atan2(velocity.x, velocity.z)

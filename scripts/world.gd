@@ -4,6 +4,8 @@ extends Node3D
 
 const Util := preload("res://scripts/util.gd")
 const Lane := preload("res://scripts/lane.gd")
+const Terrain := preload("res://scripts/terrain.gd")
+const Scenery := preload("res://scripts/scenery.gd")
 
 const ROAD_HALF := 4.0
 const PAVE_HALF := 8.0
@@ -35,6 +37,7 @@ var road_puddles: Array[Vector3] = []
 var slow_zones: Array = []  # [Vector2 centre, radius]
 var bus_stops := 0
 var path_rects: Array[Rect2] = []
+var lifted := false  # true once the terrain has lifted everything onto the hills
 
 
 func build(level: Dictionary, random: RandomNumberGenerator, with_spots := true) -> void:
@@ -75,6 +78,20 @@ func build(level: Dictionary, random: RandomNumberGenerator, with_spots := true)
 	_build_paths()
 	_build_theme()
 	_build_event_deco()
+	Terrain.apply(self)
+	lifted = true
+	_trim_shadows(self)
+
+
+## Small props and flat ground pieces don't need to cast shadows: skipping them keeps
+## the shadow pass cheap now the streets are lined with houses, trees and park furniture.
+func _trim_shadows(n: Node) -> void:
+	for c in n.get_children():
+		if c is MeshInstance3D and c.mesh:
+			var sz: Vector3 = c.get_aabb().size * c.global_basis.get_scale().abs() if c.is_inside_tree() else c.get_aabb().size * c.scale.abs()
+			if sz.y < 0.2 or maxf(sz.x, maxf(sz.y, sz.z)) < 0.7:
+				c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_trim_shadows(c)
 
 
 func _seg_rect(a: Vector2, b: Vector2, half: float) -> Rect2:
@@ -96,6 +113,16 @@ static func yaw_of(d: Vector3) -> float:
 
 
 # ---------------------------------------------------------------- queries
+
+## Ground height at p (hills and car park ramps; 0 on flat levels).
+func height_at(p: Vector3) -> float:
+	return Terrain.height(def.get("terrain", {}), p.x, p.z)
+
+
+## Nose-up angle for a car at p facing fwd.
+func pitch_at(p: Vector3, fwd: Vector3) -> float:
+	return Terrain.pitch(def.get("terrain", {}), p, fwd)
+
 
 ## The nearest walkable point to p, for spawning safely.
 func nearest_walkable(p: Vector3) -> Vector3:
@@ -142,7 +169,8 @@ func random_walk_point(r: RandomNumberGenerator, away_from := Vector3.ZERO, min_
 		if pavement and _in_road(Vector2(p.x, p.z)):
 			continue
 		if p.distance_to(away_from) >= min_dist:
-			return p
+			break
+	p.y = height_at(p) if lifted else 0.0
 	return p
 
 
@@ -168,10 +196,11 @@ func build_road_puddles() -> void:
 						junction = true
 				if junction or not bounds.grow(-2.0).has_point(q):
 					continue
-				var puddle := Util.cylinder(rng.randf_range(0.9, 1.3), 0.02, water, _v3(q, 0.075))
+				var gh := height_at(_v3(q))
+				var puddle := Util.cylinder(rng.randf_range(0.9, 1.3), 0.02, water, _v3(q, 0.075 + gh))
 				puddle.scale = Vector3(1.5, 1, 0.8) if absf(d.x) > 0.5 else Vector3(0.8, 1, 1.5)
 				add_child(puddle)
-				road_puddles.append(_v3(q))
+				road_puddles.append(_v3(q, gh))
 			t += rng.randf_range(10.0, 16.0)
 
 
@@ -235,7 +264,7 @@ func _build_environment() -> void:
 	sun.rotation_degrees = Vector3(-60, 30, 0)
 	sun.light_color = def.sun
 	sun.light_energy = def.sun_energy * 0.7
-	sun.shadow_enabled = true
+	sun.shadow_enabled = Game.shadows_on()
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 
@@ -326,7 +355,7 @@ func _build_spots() -> void:
 				var n: Vector3 = _left(d) * side
 				var centre: Vector3 = _v3(a + d2 * t) + n * SPOT_OFFSET
 				var c2 := Vector2(centre.x, centre.z)
-				if not inner.has_point(c2):
+				if not inner.has_point(c2) or not _flat_at(c2):
 					continue
 				var junction := false
 				for j in pave_rects.size():
@@ -590,7 +619,10 @@ func _build_theme() -> void:
 			_bunting_along(Color(1, 0.2, 0.2), Color(1, 0.85, 0.3), 3.2, true)
 			_scatter(30, _pine)
 			_scatter(10, _snowman)
+		"hills", "terraces":
+			Scenery.build_theme(self)
 	_street_furniture()
+	Scenery.dress(self)
 
 
 func _line_buildings(width: Vector2, height: Vector2, depth: float, setback: float, maker: Callable) -> void:
@@ -1158,54 +1190,118 @@ func _planter(p: Vector3) -> void:
 
 
 func _build_multistorey() -> void:
+	## A split-level car park: flat decks joined by ramps (see the "decks" terrain in levels.gd).
+	## Height is added afterwards by terrain.gd, so everything here is built as if flat.
 	var concrete := Color(0.55, 0.55, 0.57)
-	# Low outer walls with "LEVEL 3" painted on, so it reads as a floor of a car park
+	var t: Dictionary = def.get("terrain", {})
+	var knots: Array = t.get("knots", [])
+	var ramps: Array = []  # [x0, x1] bands where the floor slopes
+	for i in range(1, knots.size()):
+		if absf(float(knots[i][1]) - float(knots[i - 1][1])) > 0.01:
+			ramps.append([float(knots[i - 1][0]), float(knots[i][0])])
+	# Outer walls, in short pieces so they step up the ramps with the floor
 	var r := bounds.grow(1.0)
-	for side in [[Vector2(r.position.x, r.position.y), Vector2(r.end.x, r.position.y)], [Vector2(r.position.x, r.end.y), Vector2(r.end.x, r.end.y)],
-			[Vector2(r.end.x, r.position.y), Vector2(r.end.x, r.end.y)]]:
-		var a: Vector2 = side[0]
-		var b: Vector2 = side[1]
-		var mid := (a + b) / 2.0
-		var horizontal := absf(a.y - b.y) < 0.1
-		add_child(Util.box(Vector3(a.distance_to(b) if horizontal else 0.6, 1.2, 0.6 if horizontal else a.distance_to(b)), concrete, _v3(mid, 0.6), true))
-		add_child(Util.box(Vector3(a.distance_to(b) if horizontal else 0.62, 0.2, 0.62 if horizontal else a.distance_to(b)), Color(1, 0.85, 0.1), _v3(mid, 1.1)))
-	for x in [-40.0, 0.0, 30.0]:
-		var l := Util.label3d("LEVEL 3", 120, Color(1, 0.85, 0.1), Vector3(x, 0.2, 0))
+	var x := r.position.x
+	while x < r.end.x:
+		for zz in [r.position.y, r.end.y]:
+			if not _in_road(Vector2(x + 1.5, zz)):
+				add_child(Util.box(Vector3(3.0, 1.2, 0.6), concrete, Vector3(x + 1.5, 0.6, zz), true))
+				add_child(Util.box(Vector3(3.02, 0.2, 0.62), Color(1, 0.85, 0.1), Vector3(x + 1.5, 1.1, zz)))
+		x += 3.0
+	var z := r.position.y
+	while z < r.end.y:
+		if not _in_road(Vector2(r.end.x, z + 1.5)):
+			add_child(Util.box(Vector3(0.6, 1.2, 3.0), concrete, Vector3(r.end.x, 0.6, z + 1.5), true))
+			add_child(Util.box(Vector3(0.62, 0.2, 3.02), Color(1, 0.85, 0.1), Vector3(r.end.x, 1.1, z + 1.5)))
+		z += 3.0
+	# Deck names painted on the floor
+	var decks := []
+	var prev := bounds.position.x
+	for rp in ramps:
+		decks.append([prev, rp[0]])
+		prev = rp[1]
+	decks.append([prev, bounds.end.x])
+	var names: Array = t.get("names", ["LEVEL 2", "LEVEL 3", "ROOF"])
+	for i in decks.size():
+		var cx := (float(decks[i][0]) + float(decks[i][1])) / 2.0
+		var l := Util.label3d(names[mini(i, names.size() - 1)], 110, Color(1, 0.85, 0.1), Vector3(cx, 0.2, 0))
 		l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		l.rotation.x = -PI / 2
 		add_child(l)
-	# Pillars on a grid, kept off the aisles and parking bays
-	var x := bounds.position.x + 4.0
+	# The gap beside each ramp: a dark drop with railings, so the ramps read as ramps
+	for rp in ramps:
+		var x0: float = rp[0]
+		var x1: float = rp[1]
+		for seg in segments:
+			if absf(seg.a.y - seg.b.y) > 0.1:
+				continue
+			# Arrows and RAMP painted on the aisles
+			var rz: float = seg.a.y
+			var up: bool = (seg.b.x > seg.a.x) == (float(knots[0][1]) < float(knots[-1][1]))
+			for k in 2:
+				var ax := lerpf(x0, x1, 0.3 + k * 0.4)
+				var arrow := Util.label3d("RAMP", 80, Color.WHITE, Vector3(ax, 0.12, rz))
+				arrow.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+				arrow.rotation = Vector3(-PI / 2, 0, 0)
+				add_child(arrow)
+			add_child(Util.label3d("UP >" if up else "< DOWN", 50, Color(0.6, 1, 0.6), Vector3((x0 + x1) / 2.0, 3.2, rz - 5.0)))
+		var zz := bounds.position.y
+		while zz < bounds.end.y:
+			var q := Vector2((x0 + x1) / 2.0, zz + 1.0)
+			if not _in_any_walk(q) and not _in_road(q):
+				var mx := x0 + 0.5
+				while mx < x1:
+					add_child(Util.box(Vector3(1.0, 0.1, 2.0), Color(0.06, 0.06, 0.08), Vector3(mx + 0.5, 0.12, zz + 1.0)))
+					mx += 1.0
+			zz += 2.0
+		# Railings along the drop
+		var rx := x0
+		while rx <= x1:
+			for edge_z in _gap_edges(rx):
+				add_child(Util.box(Vector3(1.0, 0.18, 0.15), Color(1, 0.8, 0.1) if int(rx) % 2 == 0 else Color(0.1, 0.1, 0.12), Vector3(rx, 0.95, edge_z)))
+				add_child(Util.box(Vector3(0.1, 0.9, 0.1), Color(0.8, 0.8, 0.82), Vector3(rx, 0.45, edge_z)))
+			rx += 1.0
+		for ex in [x0, x1]:
+			var ez := bounds.position.y
+			while ez < bounds.end.y:
+				var q := Vector2(ex + (0.6 if ex == x0 else -0.6), ez + 0.5)
+				if not _in_any_walk(q) and not _in_road(q):
+					add_child(Util.box(Vector3(0.15, 0.18, 1.0), Color(1, 0.8, 0.1), Vector3(ex, 0.95, ez + 0.5)))
+					add_child(Util.box(Vector3(0.1, 0.9, 0.1), Color(0.8, 0.8, 0.82), Vector3(ex, 0.45, ez + 0.5)))
+				ez += 1.0
+	# Pillars on a grid, kept off the aisles, parking bays and ramps; the roof deck has none
+	var roof_x: float = float(knots[-1][0]) if not knots.is_empty() else INF
+	x = bounds.position.x + 4.0
 	while x < bounds.end.x - 2.0:
-		var z := bounds.position.y + 3.0
+		z = bounds.position.y + 3.0
 		while z < bounds.end.y - 2.0:
 			var q := Vector2(x, z)
-			var clear := not _in_road(q)
+			var clear := not _in_road(q) and x < roof_x and _flat_at(q)
 			for s in spots:
 				if Vector2(s.pos.x, s.pos.z).distance_to(q) < 4.0:
 					clear = false
 			for pr in path_rects:
 				if pr.grow(0.8).has_point(q):
 					clear = false
-			if clear:
+			if clear and _in_any_walk(q):
 				add_solid(Vector3(1.0, 5.0, 1.0), concrete, _v3(q, 2.5))
 				for h in [0.4, 1.2]:
 					add_child(Util.box(Vector3(1.04, 0.3, 1.04), Color(1, 0.8, 0.1) if h < 1.0 else Color(0.1, 0.1, 0.1), _v3(q, h)))
 			z += 12.0
 		x += 12.0
-	# Strip lights hanging over the aisles
+	# Strip lights hanging over the aisles (not over the open roof)
 	for seg in segments:
 		var a: Vector2 = seg.a
 		var b: Vector2 = seg.b
 		var d := (b - a).normalized()
-		var t := 6.0
-		while t < a.distance_to(b):
-			var q: Vector2 = a + d * t
-			if bounds.has_point(q):
+		var tt := 6.0
+		while tt < a.distance_to(b):
+			var q: Vector2 = a + d * tt
+			if bounds.has_point(q) and q.x < roof_x:
 				var strip := Util.box(Vector3(2.4, 0.12, 0.3), Util.glow(Color(0.85, 0.95, 1.0), 3.0), _v3(q, 4.8))
 				strip.rotation.y = yaw_of(_v3(d))
 				add_child(strip)
-				if lights.size() < 18:
+				if lights.size() < 16:
 					var light := OmniLight3D.new()
 					light.light_color = Color(0.85, 0.95, 1.0)
 					light.light_energy = 1.6
@@ -1213,10 +1309,50 @@ func _build_multistorey() -> void:
 					light.position = _v3(q, 4.4)
 					add_child(light)
 					lights.append(light)
-			t += 14.0
-	# Ramp to the next level, and a pay machine
-	add_child(Util.box(Vector3(10, 0.3, 14), Color(0.45, 0.45, 0.48), Vector3(bounds.end.x + 6.0, 0.6, 0), true))
-	add_child(Util.label3d("UP TO LEVEL 4 >", 70, Color.WHITE, Vector3(bounds.end.x + 4.0, 2.0, 0)))
+			tt += 14.0
+	# Roof deck: lamp posts and a view of the city lights
+	if roof_x < INF:
+		for q in [Vector2(roof_x + 4, -9), Vector2(roof_x + 4, 9), Vector2(bounds.end.x - 4, 0)]:
+			add_solid(Vector3(0.3, 4.2, 0.3), Color(0.25, 0.25, 0.3), _v3(q, 2.1), false)
+			add_child(Util.box(Vector3(0.6, 0.25, 0.6), Util.glow(Color(1, 0.9, 0.6), 2.5), _v3(q, 4.3)))
+			if lights.size() < 20:
+				var l := OmniLight3D.new()
+				l.light_color = Color(1, 0.9, 0.6)
+				l.light_energy = 2.2
+				l.omni_range = 10.0
+				l.position = _v3(q, 3.8)
+				add_child(l)
+				lights.append(l)
+		for i in 30:
+			var bx := rng.randf_range(bounds.end.x + 20, bounds.end.x + 80)
+			var bz := rng.randf_range(bounds.position.y - 60, bounds.end.y)
+			var bh := rng.randf_range(8, 30)
+			var tower := Util.box(Vector3(8, bh, 8), Color(0.12, 0.12, 0.18), Vector3(bx, bh / 2.0 - 4.0, bz))
+			add_child(tower)
+			for k in 3:
+				add_child(Util.box(Vector3(6, 0.6, 0.1), Util.glow(Color(1, 0.85, 0.5), 1.5), Vector3(bx, rng.randf_range(0, bh - 5.0), bz + 4.05)))
+
+
+## Is the floor level here (not on a ramp)?
+func _flat_at(q: Vector2) -> bool:
+	var t: Dictionary = def.get("terrain", {})
+	if t.get("type", "") != "decks":
+		return true
+	return absf(Terrain.height(t, q.x + 1.0, q.y) - Terrain.height(t, q.x - 1.0, q.y)) < 0.01
+
+
+## z positions along x where the walkable floor meets the drop beside a ramp.
+func _gap_edges(x: float) -> Array:
+	var out := []
+	var z := bounds.position.y
+	var was := _in_any_walk(Vector2(x, z))
+	while z < bounds.end.y:
+		z += 0.5
+		var now := _in_any_walk(Vector2(x, z))
+		if now != was:
+			out.append(z - 0.25)
+		was = now
+	return out
 
 
 # ---------------------------------------------------------------- special event decorations
