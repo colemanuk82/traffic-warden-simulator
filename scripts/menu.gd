@@ -310,7 +310,7 @@ func _build_levels() -> Control:
 	_header(root, "PICK YOUR BEAT")
 	root.set_meta("header", root.get_child(0))
 	var grid := GridContainer.new()
-	grid.columns = 4
+	grid.columns = 5
 	grid.position = Vector2(40, 106)
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
@@ -318,40 +318,40 @@ func _build_levels() -> Control:
 	for i in Levels.count():
 		var lv := Levels.get_level(i)
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(289, 212)
+		b.custom_minimum_size = Vector2(228, 212)
 		b.set_meta("level", i)
 		grid.add_child(b)
 		var map := Control.new()
 		map.position = Vector2(10, 10)
-		map.size = Vector2(110, 110)
+		map.size = Vector2(90, 90)
 		map.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map.draw.connect(_draw_level_map.bind(map, lv))
 		b.add_child(map)
-		var name := _title_label(lv.name, 24)
-		name.position = Vector2(128, 10)
-		name.size = Vector2(156, 100)
+		var name := _title_label(lv.name, 20)
+		name.position = Vector2(106, 8)
+		name.size = Vector2(116, 104)
 		name.autowrap_mode = TextServer.AUTOWRAP_WORD
 		name.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(name)
 		var stars := Control.new()
-		stars.position = Vector2(10, 126)
-		stars.size = Vector2(270, 44)
+		stars.position = Vector2(4, 120)
+		stars.size = Vector2(220, 44)
 		stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stars.draw.connect(func() -> void:
 			var n := Game.level_stars(i)
 			for s in 3:
-				Hud.draw_star(stars, Vector2(20 + s * 42, 20), 17.0, s < n)
+				Hud.draw_star(stars, Vector2(20 + s * 36, 20), 15.0, s < n)
 			var medal := Game.best_time_medal(lv.id, float(lv.time))
 			if medal > 0:
 				var mc: Color = [Color.WHITE, Color(0.8, 0.5, 0.25), Color(0.8, 0.82, 0.88), Color(1, 0.8, 0.2)][medal]
-				stars.draw_circle(Vector2(160, 20), 15.0, INK)
-				stars.draw_circle(Vector2(160, 20), 12.0, mc)
+				stars.draw_circle(Vector2(140, 20), 13.0, INK)
+				stars.draw_circle(Vector2(140, 20), 10.0, mc)
 			var found: int = (Game.collectibles.get(lv.id, []) as Array).size()
-			stars.draw_string(Game.font_body, Vector2(186, 28), "%d/3" % found, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.8, 0.2) if found == 3 else INK))
+			stars.draw_string(Game.font_body, Vector2(160, 28), "%d/3" % found, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 0.8, 0.2) if found == 3 else INK))
 		b.add_child(stars)
 		var lock := Label.new()
-		lock.position = Vector2(10, 172)
-		lock.size = Vector2(270, 34)
+		lock.position = Vector2(8, 170)
+		lock.size = Vector2(214, 34)
 		lock.add_theme_font_size_override("font_size", 19)
 		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock.set_meta("is_lock", true)

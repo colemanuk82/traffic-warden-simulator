@@ -275,6 +275,8 @@ func update_player(i: int, d: Dictionary) -> void:
 		status = "SPEED BOOST %ds" % int(ceil(d.boost))
 	if d.soaked:
 		status = "SOAKED!"
+	if status == "" and d.get("sweets", -1) >= 0:
+		status = "SWEETS x%d" % d.sweets if d.sweets > 0 else "NO SWEETS! WATCH OUT"
 	u.status.text = status
 	if d.gadget != "":
 		var name: String = {"clamp": "Wheel Clamp", "tow": "Tow Truck", "camera": "Camera Van"}[d.gadget]
@@ -360,7 +362,8 @@ func _draw_minimap() -> void:
 	for d in get_tree().get_nodes_in_group("drivers"):
 		minimap.draw_circle(to_map.call(d.global_position), 3.0, Color(1, 0.3, 0.25))
 	for pk in main.pickups:
-		minimap.draw_circle(to_map.call(pk.node.position), 3.0, Color(0.6, 0.4, 0.2) if pk.kind == "coffee" else Color(0.3, 1, 0.3))
+		var pk_col: Color = {"coffee": Color(0.6, 0.4, 0.2), "sweets": Color(1, 0.55, 0.1), "present": Color(1, 0.3, 0.3)}.get(pk.kind, Color(0.3, 1, 0.3))
+		minimap.draw_circle(to_map.call(pk.node.position), 3.0, pk_col)
 	if main.boss_car != null and is_instance_valid(main.boss_car):
 		minimap.draw_circle(to_map.call(main.boss_car.position), 5.0, Color(1, 0.3, 0.9))
 	for i in main.players.size():

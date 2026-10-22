@@ -43,7 +43,7 @@ func setup(weather: String, the_world, follow: Node3D) -> void:
 			_snow(3000, 7.0)
 			_fog(Color(0.85, 0.88, 0.95), 0.02)
 		"fog":
-			_fog(Color(0.75, 0.77, 0.8), 0.016)
+			_fog(main.level.get("fog_color", Color(0.75, 0.77, 0.8)), 0.016)
 			sun.light_energy *= 0.7
 		"wind":
 			_leaves()

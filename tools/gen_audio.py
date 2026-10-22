@@ -3,6 +3,7 @@
 Everything is synthesised from scratch (numpy + scipy), and the voices come from
 espeak-ng, so there are no third-party audio files to license.
 Run:  python3 tools/gen_audio.py   (needs numpy, scipy, ffmpeg, espeak-ng)
+      --extras or --seasonal regenerate only the career-update or Halloween/Christmas files
 Writes .ogg files into audio/music, audio/sfx and audio/voice.
 """
 import os
@@ -885,7 +886,7 @@ HECKLES = [
 DRIVER_LINES = {
     "oi": "Oi! That's my car!", "what": "You what?!", "minutes": "I was only two minutes!",
     "comehere": "Come here!", "minute": "I was only here for a minute!",
-    "where": "Where else am I meant to park?!", "tosser": "You're a tosser!", "jobsworth": "Jobsworth!", "takethat": "Ha! Take that!", "hmph": "Hmph!",
+    "where": "Where else am I meant to park?!", "jobsworth": "Jobsworth!", "takethat": "Ha! Take that!", "hmph": "Hmph!",
 }
 PUNCHED_LINES = {"ow": "Ow!", "nose": "My nose!", "oof": "Ooof!", "mum": "I'm telling my mum!"}
 WARDEN_LINES = {"oof": "Oof!", "hiyah": "Hi-yah!", "niceday": "Have a nice day!", "gotcha": "Gotcha!",
@@ -1376,10 +1377,163 @@ def extras():
     print("extras done")
 
 
+# ------------------------------------------------------------------ Halloween and Christmas Eve levels
+
+SPOOKY_PROG = ["Em", "Em", "Am", "B7", "Em", "C", "B7", "Em", "Am", "Em", "B7", "Em", "C", "Am", "B7", "B7"]
+SPOOKY_TUNE = """
+E5:1 G5:1 B5:1 A#5:1
+B5:2 G5:1 E5:1
+A5:1 C6:1 E6:1 D#6:1
+E6:2 B5:2
+E5:.5 F#5:.5 G5:1 B5:1 G5:1
+E5:1 C5:1 E5:1 G5:1
+F#5:1 D#5:1 B4:1 D#5:1
+E5:3 r:1
+C6:1 B5:1 A5:1 E5:1
+G5:1 F#5:1 E5:1 B4:1
+D#5:1 F#5:1 A5:1 C6:1
+B5:3 r:1
+G5:1 E5:1 C5:1 E5:1
+A5:1 C6:1 B5:1 A5:1
+F#5:1 A5:1 D#6:1 F#6:1
+E6:2 r:2
+"""
+
+
+def theremin(f, dur, v=1.0):
+    """A wobbly, swoopy theremin lead."""
+    t = tvec(dur)
+    glide = 1 + 0.03 * np.exp(-t * 12) * -1
+    x = np.sin(phase(f * glide, t, vibrato(t, 6.0, 0.012, 0.05)))
+    return x * adsr(len(t), 0.06, 0.2, 0.85, 0.12) * 0.5 * v
+
+
+def track_spooky():
+    s = Song(126, 32, swing=0.2)
+    prog = SPOOKY_PROG * 2
+    kit = {"kick": "x.....x.x.......", "snare": "....x.......x...", "hat": "..x...x...x...x."}
+    s.drums(24, kit, start_bar=8, gain=0.75)
+    bass_line(s, prog, pluck_bass, "pizz", gain=1.0)
+    comp_pattern(s, prog, harpsichord, (0.5, 1.5, 2.5, 3.5), octave=4, gain=0.45, length=0.3)
+    comp_pattern(s, prog, organ, (0,), octave=3, gain=0.45, length=3.8, bus="pad")
+    s.melody(SPOOKY_TUNE, glock, 0, gain=0.9)
+    s.melody(SPOOKY_TUNE, theremin, 16, gain=1.0)
+    s.melody(SPOOKY_TUNE, organ, 16, gain=0.5, transpose=-12)
+    for bar in range(0, 32, 4):
+        s.add(bell(hz(midi("E3")), 2.0), bar * 4, "pad", 0.0, 0.5)
+    return s.mixdown({"lead": fx_reverb(0.4, 1.4), "pad": fx_reverb(0.45, 1.5), "comp": fx_reverb(0.2)})
+
+
+# "Deck the Halls" (traditional)
+XMASEVE_PROG = ["C", "C", "G7", "C", "C", "C", "G7", "C", "G7", "C", "D7", "G", "C", "C", "G7", "C"]
+XMASEVE_TUNE = """
+G4:1.5 F4:.5 E4:1 D4:1
+C4:1 D4:1 E4:1 C4:1
+D4:.5 E4:.5 F4:.5 D4:.5 E4:1.5 D4:.5
+C4:1 B3:1 C4:2
+G4:1.5 F4:.5 E4:1 D4:1
+C4:1 D4:1 E4:1 C4:1
+D4:.5 E4:.5 F4:.5 D4:.5 E4:1.5 D4:.5
+C4:1 B3:1 C4:2
+D4:1.5 E4:.5 F4:1 D4:1
+E4:1.5 F4:.5 G4:1 D4:1
+E4:.5 F#4:.5 G4:1 A4:.5 B4:.5 C5:1
+B4:1 A4:1 G4:2
+G4:1.5 F4:.5 E4:1 D4:1
+C4:1 D4:1 E4:1 C4:1
+A4:.5 A4:.5 A4:.5 A4:.5 G4:1.5 F4:.5
+E4:1 D4:1 C4:2
+"""
+
+
+def track_xmaseve():
+    s = Song(132, 32, swing=0.15)
+    prog = XMASEVE_PROG * 2
+    kit = {"kick": "x.......x.......", "snare": "....x.......x...", "sleigh": "x.x.x.x.x.x.x.x."}
+    s.drums(16, kit, start_bar=16, gain=0.75)
+    s.drums(16, {"sleigh": "x...x...x...x..."}, start_bar=0, gain=0.6)
+    bass_line(s, prog, bass_round, "pizz", gain=0.9)
+    comp_pattern(s, prog, strings, (0,), octave=3, gain=0.45, length=3.8, bus="pad")
+    comp_pattern(s, prog, epiano, (1, 3), octave=4, gain=0.5, length=0.5)
+    s.melody(XMASEVE_TUNE, bell, 0, gain=1.0, transpose=12)
+    s.melody(XMASEVE_TUNE, glock, 0, gain=0.6, transpose=24)
+    s.melody(XMASEVE_TUNE, brass, 16, gain=0.9, transpose=12)
+    s.melody(XMASEVE_TUNE, bell, 16, gain=0.6, transpose=24)
+    return s.mixdown({"lead": fx_reverb(0.35, 1.3), "pad": fx_reverb(0.4, 1.4), "comp": fx_reverb(0.25)})
+
+
+def sfx_jingle():
+    out = np.zeros(int(1.6 * SR))
+    for i in range(10):
+        _place(out, sleigh(1.0) * 2.0, i * 0.14 + rng.uniform(0, 0.03))
+    for i, f in enumerate((2093, 2637, 3136)):
+        t = tvec(0.6)
+        _place(out, np.sin(2 * np.pi * f * t) * np.exp(-t * 6) * 0.25, 0.2 + i * 0.3)
+    return norm(out) * 0.7
+
+
+HALLOWEEN_HECKLES = [
+    "It's Halloween, give us a break!", "Nice costume! Oh wait...", "Trick or treat, jobsworth!",
+    "Boo! Get a proper job!", "You're scarier than a ghost!", "Go haunt someone else!",
+    "Even zombies hate you!", "Spooky jobsworth!",
+]
+CHRISTMAS_HECKLES = [
+    "Come on, it's Christmas!", "Come on mate, it's Christmas!", "Bah humbug!",
+    "You're on the naughty list!", "Have a heart, it's Christmas Eve!", "Alright, Scrooge!",
+    "Santa's watching you!", "Ho ho no!", "It's Christmas, you Grinch!", "No presents for you!",
+]
+KID_VOICES = [("en-gb+f2", 99, 185), ("en-us+f4", 95, 195), ("en-gb+f5", 90, 190), ("en-gb-scotland+f3", 99, 180)]
+SANTA_VOICE = ("en-gb+m3", 15, 125, False)
+SEASONAL_GROUPS = {
+    "kid_tot": (["Trick or treat!", "Trick or treat!", "Trick or treat! Sweets please!", "Trick or treat!"], "kid"),
+    "kid_thanks": (["Thank you!", "Happy Halloween!", "Yay, sweets!"], "kid"),
+    "kid_trick": (["No sweets? Trick!", "Gotcha!", "Tricked ya!"], "kid"),
+    "santa_hohoho": (["Ho ho ho!", "Ho ho ho! Merry Christmas!", "Ho ho no!"], SANTA_VOICE),
+    "santa_naughty": (["Naughty list for you!", "I've got a schedule to keep!"], SANTA_VOICE),
+    "driver_hween": (["It's Halloween, mate!", "It's Halloween, mate!"], None),
+    "driver_ghoul": (["You absolute ghoul!", "You absolute ghoul!"], None),
+    "driver_xmas": (["Come on, it's Christmas!", "Come on, it's Christmas!"], None),
+    "driver_grinch": (["You Grinch!", "You Grinch!"], None),
+    "ped_caroller": (["Fa la la la la!", "Deck the halls!", "Merry Christmas!"], ("en-gb+f3", 75, 140, False)),
+    "ped_elf": (["You're on the naughty list!", "Jingle jingle!"], ("en-gb+m5", 99, 210, False)),
+}
+
+
+def seasonal():
+    music = os.path.join(ROOT, "music")
+    sfx = os.path.join(ROOT, "sfx")
+    voice = os.path.join(ROOT, "voice")
+    for name, fn in {"spooky": track_spooky, "xmaseve": track_xmaseve}.items():
+        print("music", name)
+        write_ogg(os.path.join(music, name + ".ogg"), fn(), quality=4)
+    write_ogg(os.path.join(sfx, "jingle.ogg"), mono_to_stereo(sfx_jingle()))
+    for prefix, lines in (("hheckle", HALLOWEEN_HECKLES), ("xheckle", CHRISTMAS_HECKLES)):
+        for i, line in enumerate(lines):
+            for j in range(2):
+                v, p, sp = VOICES[(i * 2 + j + 3) % len(VOICES)]
+                write_ogg(os.path.join(voice, "%s_%d_%d.ogg" % (prefix, i, j)), mono_to_stereo(speak(line, v, p, sp)))
+    for group, (lines, vs) in SEASONAL_GROUPS.items():
+        for j, line in enumerate(lines):
+            if vs == "kid":
+                v, p, sp = KID_VOICES[j % len(KID_VOICES)]
+                data = speak(line, v, p, sp, False)
+            elif vs is None:
+                v, p, sp = VOICES[(j * 2 + len(group)) % len(VOICES)]
+                data = speak(line, v, p, sp)
+            else:
+                v, p, sp, shout = vs
+                data = speak(line, v, p, sp, shout)
+            write_ogg(os.path.join(voice, "%s_%d.ogg" % (group, j)), mono_to_stereo(data))
+    print("seasonal done")
+
+
 if __name__ == "__main__":
     import sys
     if "--extras" in sys.argv:
         extras()
+    elif "--seasonal" in sys.argv:
+        seasonal()
     else:
         main()
         extras()
+        seasonal()

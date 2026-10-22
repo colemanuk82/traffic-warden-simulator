@@ -17,12 +17,15 @@ const SHOUTS := [
 	["Jobsworth!", "driver_jobsworth"], ["Come 'ere!", "driver_comehere"], ["I was only 2 minutes!", "driver_minutes"],
 	["#@%&!", ""],
 ]
+const SANTA_SHOUTS := [["HO HO NO!", "santa_hohoho"], ["Naughty list for YOU!", "santa_naughty"],
+	["I've got a schedule to keep!", "santa_naughty"]]
 
 var main
 var car
 var target  # the warden being chased
 var hp := 1  # punches needed to floor them (White Van Man takes two)
 var bodyguard := false
+var santa := false  # Christmas Eve: Santa himself, after you ticket his sleigh
 var chase_speed := CHASE_SPEED
 var state := "chase"  # chase, return, knocked
 var chase_left := CHASE_TIME
@@ -62,6 +65,10 @@ func _ready() -> void:
 	if bodyguard:
 		shirt = Color(0.08, 0.08, 0.1)
 		dark = Color(0.05, 0.05, 0.07)
+	elif santa:
+		shirt = Color(0.85, 0.1, 0.1)
+		dark = Color(0.08, 0.08, 0.08)
+		skin = Color(1.0, 0.75, 0.68)
 	elif hp > 1:
 		shirt = Color(0.95, 0.95, 0.95)
 	visual.add_child(Util.box(Vector3(0.18, 0.5, 0.18), Util.mat(dark, true), Vector3(-0.14, 0.25, 0)))
@@ -78,6 +85,12 @@ func _ready() -> void:
 	if bodyguard:
 		visual.add_child(Util.box(Vector3(0.6, 0.12, 0.06), Util.mat(Color(0.02, 0.02, 0.02)), Vector3(0, 1.7, 0.38)))
 		visual.add_child(Util.box(Vector3(0.12, 0.3, 0.05), Util.mat(Color(0.9, 0.1, 0.1)), Vector3(0, 1.1, 0.35)))
+	elif santa:
+		visual.add_child(Util.sphere(0.36, Util.mat(Color.WHITE, true), Vector3(0, 1.42, 0.16)))
+		visual.add_child(Util.box(Vector3(0.75, 0.12, 0.72), Util.mat(Color(0.1, 0.1, 0.1)), Vector3(0, 0.75, 0)))
+		visual.add_child(Util.cylinder(0.36, 0.6, Util.mat(Color(0.85, 0.1, 0.1), true), Vector3(0, 2.1, 0), false, 0.03))
+		visual.add_child(Util.cylinder(0.43, 0.14, Util.mat(Color.WHITE), Vector3(0, 1.86, 0)))
+		visual.add_child(Util.sphere(0.13, Util.mat(Color.WHITE), Vector3(0, 2.44, 0)))
 	elif hp > 1:
 		# White Van Man: builder's belly, tiny shorts energy and a pencil behind the ear
 		visual.add_child(Util.sphere(0.42, Util.mat(Color(0.95, 0.95, 0.95), true), Vector3(0, 0.85, 0.12)))
@@ -109,7 +122,12 @@ func _physics_process(delta: float) -> void:
 		shout_timer -= delta
 		if shout_timer <= 0.0:
 			shout_timer = randf_range(1.8, 2.8)
-			var line: Array = SHOUTS[randi() % SHOUTS.size()]
+			var pool: Array = SHOUTS
+			if santa:
+				pool = SANTA_SHOUTS
+			elif main.level.has("driver_shouts") and randf() < 0.5:
+				pool = main.level.driver_shouts
+			var line: Array = pool[randi() % pool.size()]
 			shout(line[0])
 			if line[1] != "":
 				Audio.voice(line[1], pitch, 1.0, false)

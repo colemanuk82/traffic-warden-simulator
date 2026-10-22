@@ -26,7 +26,7 @@ var lane
 var spot = null  # Dictionary, or null for passing traffic
 var heckler := false
 var start_parked := false
-var kind := ""  # "" random everyday car, or sports, limo, whitevan, getaway, wedding, fan, sleigh, icecream
+var kind := ""  # "" random everyday car, or sports, limo, whitevan, getaway, wedding, fan, sleigh, hearse, icecream
 var boss := {}  # boss drivers: {"id", "name", "hp", ...} (see career.gd)
 var expired_chance := 0.35
 var splasher := false
@@ -40,6 +40,7 @@ var tow_truck: Node3D
 var drive_speed := DRIVE_SPEED
 var pass_speed := PASS_SPEED
 var heckle_lines: Array = HECKLE_TEXT
+var heckle_voice := "heckle"  # voice files are <heckle_voice>_<line>_<n>.ogg
 var s := 0.0
 var speed := 0.0
 var state := "arriving"  # arriving, parking, parked, unparking, leaving, passing
@@ -166,6 +167,12 @@ func _build_visual(rng: RandomNumberGenerator) -> void:
 			length = 4.4
 			cab_len = 1.0
 			cab_h = 0.3
+		"hearse":
+			c = Color(0.08, 0.06, 0.1)
+			length = 5.6
+			cab_len = 4.0
+			cab_x = -0.5
+			cab_h = 0.95
 		"fan":
 			c = [Color(0.85, 0.1, 0.1), Color(0.1, 0.3, 0.9)][rng.randi() % 2]
 		"4x4":
@@ -238,6 +245,11 @@ func _build_visual(rng: RandomNumberGenerator) -> void:
 	var skin := Color.from_hsv(rng.randf_range(0.04, 0.09), rng.randf_range(0.3, 0.6), rng.randf_range(0.45, 1.0))
 	driver_head.add_child(Util.sphere(0.28, skin, Vector3.ZERO, true))
 	driver_head.add_child(Util.hemisphere(0.3, Color.from_hsv(rng.randf_range(0.0, 0.12), 0.6, rng.randf_range(0.1, 0.6)), Vector3(0, 0.05, 0)))
+	if kind == "sleigh":
+		# Santa's at the reins: beard and bobble hat
+		driver_head.add_child(Util.sphere(0.24, Color.WHITE, Vector3(0.12, -0.12, 0), true))
+		driver_head.add_child(Util.cylinder(0.27, 0.45, Color(0.85, 0.1, 0.1), Vector3(0, 0.35, 0), true, 0.02))
+		driver_head.add_child(Util.sphere(0.1, Color.WHITE, Vector3(0, 0.6, 0)))
 	driver_arm = Node3D.new()
 	driver_arm.position = Vector3(0.1, -0.15, -0.3)
 	driver_arm.visible = false
@@ -355,6 +367,12 @@ func _build_extras(c: Color, length: float, cab_x: float, cab_len: float, roof_y
 				for z in [-0.15, 0.15]:
 					for x in [-0.4, 0.4]:
 						deer.add_child(Util.cylinder(0.06, 0.6, Color(0.4, 0.25, 0.15), Vector3(x, 0.3, z)))
+		"hearse":
+			# A haunted hearse: purple trim, a pumpkin on the roof and a ghostly glow
+			body_mesh.add_child(Util.box(Vector3(length * 0.98, 0.06, width + 0.02), Color(0.55, 0.2, 0.75), Vector3(0, 0.85, 0)))
+			body_mesh.add_child(Util.sphere(0.4, Util.glow(Color(1, 0.5, 0.05), 1.2), Vector3(-1.0, roof_y + 0.3, 0), true))
+			body_mesh.add_child(Util.label3d("R.I.P.", 34, Color(0.75, 0.6, 1.0), Vector3(-length / 2.0 - 0.06, 0.9, 0)))
+			body_mesh.add_child(Util.label3d("BOO!", 30, Color(0.7, 1.0, 0.7), Vector3(-0.8, roof_y - 0.4, width / 2.0 + 0.05)))
 		"bus":
 			body_mesh.add_child(Util.box(Vector3(length * 0.98, 0.25, width + 0.02), Color(1, 0.85, 0.1), Vector3(0, 1.25, 0)))
 			body_mesh.add_child(Util.label3d("42  TOWN CENTRE", 40, Color(1, 0.9, 0.3), Vector3(length / 2.0 + 0.06, roof_y - 0.3, 0)))
@@ -628,7 +646,7 @@ func _update_heckle() -> void:
 		var tw := create_tween().set_loops(5)
 		tw.tween_property(driver_arm, "rotation:x", 0.6, 0.12)
 		tw.tween_property(driver_arm, "rotation:x", -0.6, 0.12)
-		Audio.voice("heckle_%d" % i if heckle_lines == HECKLE_TEXT else "heckle", main.rng.randf_range(0.92, 1.1))
+		Audio.voice("%s_%d" % [heckle_voice, i], main.rng.randf_range(0.92, 1.1))
 		main.on_heckled(self, w)
 
 
@@ -772,7 +790,7 @@ func is_parked() -> bool:
 func is_illegal() -> bool:
 	if spot == null or not is_parked():
 		return false
-	if not boss.is_empty() or kind in ["wedding", "sleigh"]:
+	if not boss.is_empty() or kind in ["wedding", "sleigh", "hearse"]:
 		return true
 	match spot.type:
 		"yellow", "busstop":
@@ -789,6 +807,8 @@ func offence_name() -> String:
 		return "WEDDING CAR +BONUS"
 	if kind == "sleigh":
 		return "SLEIGH ON THE PAVEMENT"
+	if kind == "hearse":
+		return "HAUNTED HEARSE +BONUS"
 	if spot.type == "busstop":
 		return "PARKED AT A BUS STOP"
 	if spot.type == "disabled":

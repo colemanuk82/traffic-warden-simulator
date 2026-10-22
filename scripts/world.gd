@@ -13,6 +13,8 @@ const SPOT_SPACING := 7.5
 const SHOP_NAMES := ["CHIPPY", "BAKERY", "BOOKIES", "THE CROWN", "LAUNDRETTE", "NEWSAGENT", "CAFE", "BARBER",
 	"KEBABS", "POUND SHOP", "CHEMIST", "TOY SHOP", "BUTCHER", "FLORIST", "VAPE", "CHARITY"]
 const NEON_NAMES := ["NOODLES", "KARAOKE", "HOTEL", "24/7", "ARCADE", "PIZZA", "CLUB", "SUSHI", "BAR", "CINEMA"]
+const XMAS_NAMES := ["TOY SHOP", "MINCE PIES", "GIFTS", "SANTA'S", "CRACKERS", "BAKERY", "THE HOLLY", "JUMPERS",
+	"TINSEL TOWN", "SWEET SHOP", "BOOKS", "DECORATIONS"]
 
 var def: Dictionary
 var rng: RandomNumberGenerator
@@ -244,10 +246,12 @@ func _build_ground() -> void:
 
 
 func _build_roads() -> void:
-	var pave_col := Color(0.62, 0.61, 0.6) if def.theme != "snow" else Color(0.85, 0.87, 0.92)
+	var pave_col := Color(0.62, 0.61, 0.6) if def.theme not in ["snow", "xmas"] else Color(0.85, 0.87, 0.92)
 	if def.theme == "posh":
 		pave_col = Color(0.86, 0.8, 0.68)
-	var road_col := Color(0.3, 0.3, 0.33) if def.theme != "city" else Color(0.2, 0.2, 0.24)
+	elif def.theme == "halloween":
+		pave_col = Color(0.42, 0.4, 0.46)
+	var road_col := Color(0.3, 0.3, 0.33) if def.theme not in ["city", "halloween"] else Color(0.2, 0.2, 0.24)
 	var clip := region.grow(10.0)
 	for i in segments.size():
 		var pr := pave_rects[i].intersection(clip)
@@ -551,7 +555,7 @@ func _build_theme() -> void:
 			_line_buildings(Vector2(6, 10), Vector2(4.5, 8), 6.0, 2.0, _suburb_house)
 			_scatter(60, _tree)
 		"town":
-			_line_buildings(Vector2(6, 9), Vector2(5, 10), 7.0, 0.3, _shop)
+			_line_buildings(Vector2(6, 9), Vector2(5, 10), 7.0, 0.5, _shop)
 			_scatter(25, _market_stall)
 			_scatter(20, _tree)
 		"seaside":
@@ -564,7 +568,7 @@ func _build_theme() -> void:
 			_scatter(70, _pine)
 		"city":
 			_build_plaza()
-			_line_buildings(Vector2(8, 13), Vector2(10, 26), 9.0, 0.3, _tower)
+			_line_buildings(Vector2(8, 13), Vector2(10, 26), 9.0, 0.5, _tower)
 			_scatter(20, _tree)
 		"posh":
 			_line_buildings(Vector2(12, 16), Vector2(6, 9), 10.0, 5.0, _mansion)
@@ -574,6 +578,18 @@ func _build_theme() -> void:
 			_build_supermarket()
 		"multistorey":
 			_build_multistorey()
+		"halloween":
+			_build_graveyard(Rect2(-11.5, 38.5, 23, 50))
+			_line_buildings(Vector2(7, 10), Vector2(4.5, 7.5), 6.0, 2.0, _spooky_house)
+			_scatter(45, _dead_tree)
+			_scatter(30, _pumpkin)
+			add_child(Util.sphere(5.0, Util.glow(Color(1.0, 0.95, 0.75), 1.6), Vector3(-30, 34, -70)))
+		"xmas":
+			_build_xmas_square(Rect2(-30, -36, 58, 28))
+			_line_buildings(Vector2(6, 9), Vector2(5, 9), 7.0, 0.5, _xmas_shop)
+			_bunting_along(Color(1, 0.2, 0.2), Color(1, 0.85, 0.3), 3.2, true)
+			_scatter(30, _pine)
+			_scatter(10, _snowman)
 	_street_furniture()
 
 
@@ -720,6 +736,198 @@ func _mansion(r: Rect2, h: float, facing: Vector3, setback: float) -> void:
 	_part(node, Vector3(s.x - 3.2, 1.1, 0.6), Color(0.2, 0.45, 0.2), Vector3(0, 0.55, front))
 
 
+# ---------------------------------------------------------------- Halloween
+
+func _spooky_house(r: Rect2, h: float, facing: Vector3, setback: float) -> void:
+	var palette := [Color(0.3, 0.26, 0.36), Color(0.25, 0.3, 0.28), Color(0.38, 0.3, 0.28), Color(0.22, 0.22, 0.28)]
+	var c: Color = palette[rng.randi() % palette.size()]
+	var node := _add_building(r, h, c, facing)
+	var s: Vector3 = node.get_meta("size")
+	var front := s.z / 2.0
+	_roof(node, Color(0.12, 0.1, 0.15))
+	_part(node, Vector3(1.2, 2.2, 0.2), Color(0.2, 0.1, 0.08), Vector3(0, 1.1, front + 0.05))
+	var lit: Color = [Color(1, 0.6, 0.15), Color(0.5, 1, 0.4), Color(0.8, 0.4, 1.0)][rng.randi() % 3]
+	_windows(node, Util.glow(lit, 1.4), 2, 2.6, 2.0 if h > 5 else 3.2)
+	# Pumpkins on the doorstep and a cobweb in the corner
+	for x in [-1.2, 1.2]:
+		if rng.randf() < 0.7:
+			var pk := Node3D.new()
+			pk.position = Vector3(x, 0, front + 0.6)
+			node.add_child(pk)
+			_pumpkin_mesh(pk, 0.4)
+	var web := Util.label3d("#", 60, Color(0.85, 0.85, 0.9, 0.7), Vector3(s.x / 2.0 - 0.5, s.y - 0.5, front + 0.1))
+	web.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	web.no_depth_test = false
+	node.add_child(web)
+	# Rickety garden fence
+	var front_y := front + setback - 0.4
+	var x := -s.x / 2.0 + 0.4
+	while x < s.x / 2.0 - 0.3:
+		if absf(x) > 0.8:
+			_part(node, Vector3(0.12, 0.9 + rng.randf_range(-0.2, 0.1), 0.08), Color(0.25, 0.2, 0.18), Vector3(x, 0.45, front_y))
+		x += 0.45
+	if rng.randf() < 0.25 and not node.get_meta("low"):
+		var sign := Util.label3d("HAUNTED", 50, Color(0.6, 1, 0.5), Vector3(0, minf(s.y + 0.6, 7.0), front + 0.2))
+		node.add_child(sign)
+
+
+func _pumpkin_mesh(parent: Node3D, size: float) -> void:
+	var body := Util.sphere(size, Util.mat(Color(1, 0.5, 0.05), true), Vector3(0, size * 0.8, 0))
+	body.scale = Vector3(1.2, 0.85, 1.2)
+	parent.add_child(body)
+	parent.add_child(Util.cylinder(size * 0.12, size * 0.4, Color(0.25, 0.45, 0.15), Vector3(0, size * 1.6, 0)))
+	var face := Util.glow(Color(1, 0.85, 0.25), 3.0)
+	for x in [-0.35, 0.35]:
+		parent.add_child(Util.prism(Vector3(size * 0.35, size * 0.3, 0.04), face, Vector3(x * size, size * 0.95, size * 1.15)))
+	parent.add_child(Util.box(Vector3(size * 0.8, size * 0.15, 0.04), face, Vector3(0, size * 0.55, size * 1.15)))
+
+
+func _pumpkin(p: Vector3) -> void:
+	var n := Node3D.new()
+	n.position = p
+	n.rotation.y = rng.randf_range(-0.6, 0.6)
+	add_child(n)
+	_pumpkin_mesh(n, rng.randf_range(0.4, 0.75))
+
+
+func _dead_tree(p: Vector3) -> void:
+	var bark := Color(0.2, 0.15, 0.13)
+	add_child(Util.cylinder(0.25, 3.2, bark, p + Vector3(0, 1.6, 0), false, 0.1))
+	for i in 4:
+		var a := i * TAU / 4.0 + rng.randf() * 0.8
+		var branch := Util.cylinder(0.1, 1.6, bark, p + Vector3(sin(a) * 0.55, 2.6 + i * 0.2, cos(a) * 0.55), false, 0.03)
+		branch.rotation = Vector3(cos(a) * 0.9, 0, -sin(a) * 0.9)
+		add_child(branch)
+
+
+func _build_graveyard(r: Rect2) -> void:
+	## The old graveyard inside the loop of the lane: railings, wonky headstones, a crypt and some mist
+	footprints.append(r)
+	add_child(Util.box(Vector3(r.size.x, 0.1, r.size.y), Color(0.16, 0.2, 0.12), _v3(r.get_center(), 0.02)))
+	var x := r.position.x
+	while x <= r.end.x:
+		add_child(Util.cylinder(0.05, 1.6, Color(0.1, 0.1, 0.12), Vector3(x, 0.8, r.position.y)))
+		add_child(Util.sphere(0.08, Color(0.1, 0.1, 0.12), Vector3(x, 1.65, r.position.y)))
+		x += 0.6
+	add_child(Util.box(Vector3(r.size.x, 0.08, 0.08), Color(0.1, 0.1, 0.12), Vector3(r.get_center().x, 1.4, r.position.y)))
+	var stone := Color(0.55, 0.55, 0.6)
+	var words := ["R.I.P.", "BOO", "R.I.P.", "TOWED", "FINED", "R.I.P."]
+	var gz := r.position.y + 3.0
+	var row := 0
+	while gz < r.position.y + 18.0:
+		var gx := r.position.x + 2.0 + (row % 2) * 1.2
+		while gx < r.end.x - 1.5:
+			var g := Node3D.new()
+			g.position = Vector3(gx, 0, gz)
+			g.rotation = Vector3(rng.randf_range(-0.15, 0.1), 0, rng.randf_range(-0.15, 0.15))
+			add_child(g)
+			g.add_child(Util.box(Vector3(1.0, 1.1, 0.25), Util.mat(stone, true), Vector3(0, 0.55, 0)))
+			var top := Util.cylinder(0.5, 0.25, Util.mat(stone, true), Vector3(0, 1.1, 0))
+			top.rotation.x = PI / 2
+			g.add_child(top)
+			if rng.randf() < 0.5:
+				var l := Util.label3d(words[rng.randi() % words.size()], 26, Color(0.2, 0.2, 0.25), Vector3(0, 0.75, 0.14))
+				l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+				l.no_depth_test = false
+				l.outline_size = 0
+				g.add_child(l)
+			gx += 2.6
+		gz += 3.2
+		row += 1
+	# Crypt
+	var crypt := Vector3(r.get_center().x, 0, r.position.y + 22.0)
+	add_child(Util.box(Vector3(5, 3, 4), Util.mat(Color(0.45, 0.45, 0.5), true), crypt + Vector3(0, 1.5, 0)))
+	var roof := Util.prism(Vector3(5.6, 1.4, 4.4), Color(0.3, 0.3, 0.35), crypt + Vector3(0, 3.7, 0))
+	add_child(roof)
+	add_child(Util.box(Vector3(1.4, 2.0, 0.1), Color(0.08, 0.06, 0.08), crypt + Vector3(0, 1.0, -2.02)))
+	var ghost := Util.label3d("WOOO...", 50, Color(0.7, 1, 0.75, 0.8), crypt + Vector3(0, 5.2, 0))
+	add_child(ghost)
+
+
+# ---------------------------------------------------------------- Christmas Eve
+
+func _xmas_shop(r: Rect2, h: float, facing: Vector3, _setback: float) -> void:
+	var palette := [Color(0.75, 0.25, 0.22), Color(0.9, 0.85, 0.75), Color(0.3, 0.45, 0.35), Color(0.55, 0.35, 0.3), Color(0.85, 0.8, 0.88)]
+	var c: Color = palette[rng.randi() % palette.size()]
+	var node := _add_building(r, h, c, facing)
+	var s: Vector3 = node.get_meta("size")
+	var front := s.z / 2.0
+	_roof(node, c, true)
+	var shop_col: Color = [Color(0.8, 0.1, 0.12), Color(0.1, 0.5, 0.2), Color(0.9, 0.75, 0.2)][rng.randi() % 3]
+	_part(node, Vector3(s.x - 0.4, 3.0, 0.3), shop_col, Vector3(0, 1.5, front + 0.1))
+	_part(node, Vector3(s.x - 1.6, 1.8, 0.1), Util.glow(Color(1, 0.85, 0.5), 1.0), Vector3(0, 1.2, front + 0.3))
+	_windows(node, Util.glow(Color(1, 0.8, 0.45), 1.2), 2, 2.4, 4.6)
+	# Snow on the shop front, a wreath on the door and fairy lights along the top
+	_part(node, Vector3(s.x - 0.2, 0.15, 0.8), Color(0.97, 0.98, 1.0), Vector3(0, 3.05, front + 0.4))
+	var wreath := Util.torus(0.25, 0.42, Util.mat(Color(0.1, 0.45, 0.2), true), Vector3(s.x / 2.0 - 0.9, 2.2, front + 0.4))
+	wreath.rotation.x = PI / 2
+	node.add_child(wreath)
+	node.add_child(Util.sphere(0.1, Util.mat(Color(0.9, 0.1, 0.1)), Vector3(s.x / 2.0 - 0.9, 1.9, front + 0.45)))
+	var t := -s.x / 2.0 + 0.4
+	var i := 0
+	while t < s.x / 2.0 - 0.2:
+		var bulb: Color = [Color(1, 0.2, 0.2), Color(0.3, 1, 0.4), Color(1, 0.85, 0.3), Color(0.4, 0.6, 1)][i % 4]
+		node.add_child(Util.sphere(0.09, Util.glow(bulb, 3.0), Vector3(t, 3.0 - absf(sin(t)) * 0.15, front + 0.3)))
+		t += 0.6
+		i += 1
+	var sign := Util.label3d(XMAS_NAMES[rng.randi() % XMAS_NAMES.size()], 64, Color.WHITE, Vector3(0, minf(3.7, s.y - 0.4), front + 0.4))
+	sign.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	sign.no_depth_test = false
+	node.add_child(sign)
+
+
+func _snowman(p: Vector3) -> void:
+	add_child(Util.sphere(0.9, Util.mat(Color.WHITE, true), p + Vector3(0, 0.8, 0)))
+	add_child(Util.sphere(0.6, Util.mat(Color.WHITE, true), p + Vector3(0, 2.0, 0)))
+	add_child(Util.cylinder(0.08, 0.4, Color(1, 0.5, 0.1), p + Vector3(0, 2.0, 0.65)))
+	add_child(Util.cylinder(0.4, 0.5, Color(0.1, 0.1, 0.1), p + Vector3(0, 2.75, 0)))
+	add_child(Util.box(Vector3(1.0, 0.15, 0.3), Color(0.85, 0.1, 0.1), p + Vector3(0, 1.55, 0.2)))
+
+
+func _build_xmas_square(r: Rect2) -> void:
+	## The town square: a giant tree with presents, Santa's grotto and market stalls round the edge
+	footprints.append(r.grow(2.0))
+	add_child(Util.box(Vector3(r.size.x, 0.09, r.size.y), Color(0.78, 0.76, 0.8), _v3(r.get_center(), 0.0)))
+	var tree := Vector3(r.get_center().x - 8.0, 0, r.position.y + 6.0)
+	add_solid(Vector3(3.0, 1.6, 3.0), Color(0.55, 0.15, 0.12), tree + Vector3(0, 0.8, 0))
+	for i in 5:
+		add_child(Util.cylinder(4.2 - i * 0.8, 2.6, Color(0.08, 0.38, 0.18), tree + Vector3(0, 2.6 + i * 1.8, 0), false, 0.15))
+	for i in 30:
+		var a := i * 2.4
+		var y := 2.0 + (i % 10) * 0.85
+		var rad := 4.0 - (y - 2.0) * 0.45
+		var col: Color = [Color(1, 0.2, 0.2), Color(1, 0.85, 0.2), Color(0.3, 0.6, 1), Color(0.95, 0.95, 1)][i % 4]
+		add_child(Util.sphere(0.25, Util.glow(col, 2.5), tree + Vector3(sin(a) * rad, y, cos(a) * rad)))
+	add_child(Util.sphere(0.7, Util.glow(Color(1, 0.9, 0.3), 5.0), tree + Vector3(0, 11.6, 0)))
+	var tl := OmniLight3D.new()
+	tl.light_color = Color(1, 0.85, 0.5)
+	tl.light_energy = 3.0
+	tl.omni_range = 14.0
+	tl.position = tree + Vector3(0, 5, 3)
+	add_child(tl)
+	lights.append(tl)
+	for i in 7:
+		var a := i * TAU / 7.0
+		var c: Color = [Color(0.9, 0.15, 0.15), Color(0.15, 0.6, 0.25), Color(0.2, 0.4, 0.95), Color(0.95, 0.8, 0.2)][i % 4]
+		var gift := tree + Vector3(sin(a) * 2.2, 0.35, cos(a) * 2.2 + 0.4)
+		add_child(Util.box(Vector3(0.8, 0.7, 0.8), Util.mat(c, true), gift))
+		add_child(Util.box(Vector3(0.82, 0.72, 0.15), Color(1, 0.9, 0.4), gift))
+	# Santa's grotto
+	var grotto := Vector3(r.get_center().x + 12.0, 0, r.position.y + 4.5)
+	add_solid(Vector3(6, 3.2, 4), Color(0.5, 0.32, 0.2), grotto + Vector3(0, 1.6, 0))
+	add_child(Util.prism(Vector3(6.6, 1.6, 4.6), Color(0.97, 0.98, 1.0), grotto + Vector3(0, 4.0, 0)))
+	add_child(Util.box(Vector3(1.4, 2.0, 0.1), Util.glow(Color(1, 0.75, 0.4), 1.5), grotto + Vector3(0, 1.0, 2.02)))
+	add_child(Util.label3d("SANTA'S GROTTO", 64, Color(1, 0.3, 0.3), grotto + Vector3(0, 5.6, 0)))
+	add_child(Util.label3d("BACK SOON - ON MY ROUNDS!", 30, Color.WHITE, grotto + Vector3(0, 2.6, 2.1)))
+	# Market stalls along the back of the square
+	var x := r.position.x + 3.0
+	while x < r.end.x - 8.0:
+		if absf(x - tree.x) > 6.0:
+			_market_stall(Vector3(x, 0, r.position.y + 2.0))
+		x += 6.0
+	add_child(Util.label3d("MERRY CHRISTMAS!", 90, Color(1, 0.85, 0.3), Vector3(r.get_center().x, 8.0, r.position.y - 2.0)))
+
+
 func _tree(p: Vector3) -> void:
 	add_child(Util.cylinder(0.25, 2.0, Color(0.45, 0.3, 0.2), p + Vector3(0, 1.0, 0)))
 	var leaf := Color(0.3, 0.6, 0.25) if def.theme != "city" else Color(0.15, 0.35, 0.25)
@@ -847,8 +1055,8 @@ func _build_plaza() -> void:
 
 
 func _build_paths() -> void:
-	var col := Color(0.72, 0.62, 0.5) if def.theme not in ["snow", "city"] else (Color(0.85, 0.87, 0.92) if def.theme == "snow" else Color(0.3, 0.28, 0.36))
-	var edge_col := Color(0.3, 0.55, 0.25) if def.theme not in ["snow", "city"] else Color(0.45, 0.45, 0.5)
+	var col := Color(0.72, 0.62, 0.5) if def.theme not in ["snow", "city", "xmas", "halloween"] else (Color(0.85, 0.87, 0.92) if def.theme in ["snow", "xmas"] else Color(0.3, 0.28, 0.36))
+	var edge_col := Color(0.3, 0.55, 0.25) if def.theme not in ["snow", "city", "xmas", "halloween"] else Color(0.45, 0.45, 0.5)
 	for r in path_rects:
 		add_child(Util.box(Vector3(r.size.x, 0.1, r.size.y), col, _v3(r.get_center(), 0.0)))
 		# Paving stripes, and low hedges or railings along the long sides

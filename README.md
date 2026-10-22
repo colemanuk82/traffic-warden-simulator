@@ -1,7 +1,7 @@
 # Traffic Warden Sim
 
 A top-down cartoon traffic warden game for Godot 4.3+. Climb the ranks from Trainee Warden to Chief Parking
-Enforcer across eight levels and four special events, take on boss drivers, play endless mode or split-screen
+Enforcer across ten levels (including Halloween and Christmas Eve) and four special events, take on boss drivers, play endless mode or split-screen
 with a mate, and spend your wages on gadgets, upgrades, weapons and a wardrobe full of unlockables.
 
 ## Quick start (no setup)
@@ -60,6 +60,8 @@ and the brolly keeps you dry from puddle splashes.
 - **Pickups**: coffee and energy drinks for speed. Three Golden Tickets hide on every level; collecting them unlocks wardrobe items.
 - **Weather**: drivers swerve through puddles to splash you in the rain (dive to dodge), and storms bring lightning with a warning ring. At night you carry a torch.
 - **Shortcuts**: footpaths and walkways cut between the roads.
+- **Halloween (Spooky Hollow)**: kids in costumes come trick-or-treating. If you have a sweet they take it and give you a treat (points, speed, extra time); with no sweets left you get tricked (egged, toilet papered, laces tied or a jump scare). Pick up pumpkin buckets for more sweets, whistle to send kids away, and ticket the Haunted Hearse for a bonus. Drivers shout "It's Halloween, give us a break!".
+- **Christmas Eve**: Santa's sleigh flies over dropping presents (most are good, some are lumps of coal) and sometimes lands on the yellows: ticket it for +250, then run from Santa. Carol singers make you sing along, elves put you on the naughty list, and drivers shout "Come on, it's Christmas!".
 
 ## Levels
 Unlock each level with stars (1 star = quota met, 2 and 3 stars for high scores).
@@ -74,6 +76,8 @@ Unlock each level with stars (1 star = quota met, 2 and 3 stars for high scores)
 | Posh Avenue | Zig-zag | Golden hour mansions and fountains | 12 |
 | SuperSave Car Park | Supermarket car park | Trolley bays, speed bumps, the store | 14 |
 | Multi-Storey | Level 3 of a concrete car park | Night, pillars, strip lights | 17 |
+| Spooky Hollow | Long street with a lane looping round a graveyard | Halloween night, haunted houses, pumpkins | 6 |
+| Christmas Eve | Crossroads by the town square | Snow, fairy lights, giant tree, Santa's grotto | 9 |
 
 Each shift rolls the weather from that level's list: sunny, rain (slippery), thunderstorm (slippery, lightning),
 snow (slower), blizzard, fog or blustery wind.
