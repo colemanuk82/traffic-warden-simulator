@@ -53,6 +53,9 @@ var profile2_name := ""  # player 2's name, asked for the first time two player 
 var _fade: ColorRect
 var _fps_label: Label
 var endless_best := {}  # level id -> best wave
+var training := false  # this shift is the short Training Day tutorial
+var training_done := false
+var title_seen := false  # the title screen shows once per launch
 
 
 func _ready() -> void:
@@ -678,6 +681,7 @@ func save_game() -> void:
 	cfg.set_value("player", "profile_name", profile_name)
 	cfg.set_value("player", "profile2_name", profile2_name)
 	cfg.set_value("records", "endless_best", endless_best)
+	cfg.set_value("player", "training_done", training_done)
 	cfg.save(SAVE_PATH)
 
 
@@ -713,6 +717,8 @@ func load_game() -> void:
 	profile_name = cfg.get_value("player", "profile_name", "")
 	profile2_name = cfg.get_value("player", "profile2_name", "")
 	endless_best = cfg.get_value("records", "endless_best", {})
+	# Anyone with a save from before the tutorial existed already knows the ropes
+	training_done = bool(cfg.get_value("player", "training_done", profile_name != ""))
 
 
 ## Wipes all progress (the Reset Progress setting). Settings and profile names are kept.

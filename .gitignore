@@ -4,3 +4,4 @@ dev/
 *.tmp
 __pycache__/
 *.import
+tools/kokoro

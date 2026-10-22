@@ -98,6 +98,7 @@ static func _building(w, theme: String, r: Rect2, facing: Vector3) -> bool:
 ## A square of park: mown grass, trees, flower beds, a bench and the odd pond.
 static func park_tile(w, theme: String, r: Rect2) -> void:
 	var rng: RandomNumberGenerator = w.rng
+	w.park_rects.append(r)
 	var snow := theme == "snow" or season(w) == "xmas"
 	var spooky := season(w) == "halloween"
 	var night: bool = w.def.get("night", false)
@@ -244,6 +245,7 @@ static func _stone_cottage(w, r: Rect2, h: float, facing: Vector3, setback: floa
 	w._windows(node, Color(0.6, 0.8, 0.95), 2, 2.2, 1.8)
 	# Dry stone wall and a gate along the front garden
 	w._part(node, Vector3(s.x - 0.2, 0.8, 0.6), Color(0.6, 0.57, 0.5), Vector3(0, 0.4, s.z / 2.0 + setback - 0.4))
+	w.add_perch(node, Vector3(rng.randf_range(-s.x * 0.3, s.x * 0.3), 0.8, s.z / 2.0 + setback - 0.4))
 	# Roses round the door
 	for i in 5:
 		w._part(node, Vector3(0.25, 0.25, 0.25), Color(1, 0.35, 0.45) if i % 2 else Color(0.3, 0.6, 0.25), Vector3(-0.8 + (i % 2) * 1.6, 0.6 + i * 0.35, s.z / 2.0 + 0.15))

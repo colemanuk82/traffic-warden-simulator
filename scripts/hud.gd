@@ -14,6 +14,12 @@ var score_label: Label
 var tickets_label: Label
 var banner_label: Label
 var boss_label: Label
+var boss_bar: HBoxContainer
+var banner_panel: Panel
+var banner_queue: Array = []  # [text, duration] waiting for the current banner to finish
+var banner_busy := false
+var banner_tw: Tween
+var popups: Array = []  # live popup labels, so new ones don't land on top of them
 var flash_rect: ColorRect
 var minimap: Control
 var pause_root: Control
@@ -48,7 +54,14 @@ func _ready() -> void:
 		level_label = _label("", 20, Color(1, 1, 1, 0.85), Vector2(26, 66), Vector2(600, 28))
 		score_label = _label("0", 50, Color.WHITE, Vector2(440, 4), Vector2(400, 60), HORIZONTAL_ALIGNMENT_CENTER, null, true)
 		tickets_label = _label("Tickets 0 / 10", 36, Color.WHITE, Vector2(840, 14), Vector2(416, 50), HORIZONTAL_ALIGNMENT_RIGHT, null, true)
-	boss_label = _label("", 28, Color(1, 0.45, 0.9), Vector2(340, 128 if two else 96), Vector2(600, 40), HORIZONTAL_ALIGNMENT_CENTER, null, true)
+	boss_label = _label("", 26, Color(1, 0.45, 0.9), Vector2(340, 124 if two else 92), Vector2(600, 36), HORIZONTAL_ALIGNMENT_CENTER, null, true)
+	boss_bar = HBoxContainer.new()
+	boss_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	boss_bar.position = Vector2(440, 160 if two else 128)
+	boss_bar.size = Vector2(400, 20)
+	boss_bar.add_theme_constant_override("separation", 4)
+	boss_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(boss_bar)
 
 	for i in main.players.size():
 		var area := Rect2(0, 0, 1280, 720)
@@ -72,7 +85,16 @@ func _ready() -> void:
 		for p in items:
 			bar.add_child(Prompt.make(p[0], p[1], 26, 18))
 
-	banner_label = _label("", 52 if two else 56, Color(1, 0.9, 0.2), Vector2(40, 190), Vector2(1200, 150), HORIZONTAL_ALIGNMENT_CENTER, null, true)
+	banner_panel = Panel.new()
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.05, 0.05, 0.12, 0.55)
+	bsb.set_corner_radius_all(18)
+	banner_panel.add_theme_stylebox_override("panel", bsb)
+	banner_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_panel.visible = false
+	root.add_child(banner_panel)
+	banner_label = _label("", 40 if two else 46, Color(1, 0.9, 0.2), Vector2(40, 200), Vector2(1200, 150), HORIZONTAL_ALIGNMENT_CENTER, null, true)
+	banner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	banner_label.visible = false
 
 	minimap = Control.new()
@@ -122,7 +144,7 @@ func _build_player_ui(i: int, area: Rect2) -> Dictionary:
 	u.status = _label("", 22, Color(0.6, 0.85, 1.0), Vector2(tx, base_y - 30), Vector2(400, 28), align, c, true)
 	u.gadget = _label("", 22, Color(1, 0.85, 0.4), Vector2(tx, base_y - 58), Vector2(400, 28), align, c, true)
 	var hint := HBoxContainer.new()
-	hint.position = Vector2(w / 2.0 - 200, 560 if not two else 580)
+	hint.position = Vector2(w / 2.0 - 200, 560 if not two else 532)
 	hint.size = Vector2(400, 44)
 	hint.alignment = BoxContainer.ALIGNMENT_CENTER
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -131,7 +153,12 @@ func _build_player_ui(i: int, area: Rect2) -> Dictionary:
 	u.hint_key = ""
 	# Ticket mini-game: stop the needle in the green
 	var tp := Control.new()
-	tp.position = Vector2(w / 2.0 - 210, 150 if two else 120)
+	if two:
+		# Low in the player's own half, clear of the timer and the boss bar
+		tp.scale = Vector2(0.72, 0.72)
+		tp.position = Vector2(w / 2.0 - 151, 468)
+	else:
+		tp.position = Vector2(w / 2.0 - 210, 150)
 	tp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.add_child(tp)
 	_rect(Color(0.1, 0.1, 0.15, 0.85), Vector2(0, 0), Vector2(420, 100), tp)
@@ -300,11 +327,27 @@ func update_player(i: int, d: Dictionary) -> void:
 func set_boss(name: String, hp: int, max_hp: int) -> void:
 	if name == "":
 		boss_label.text = ""
+		boss_bar.visible = false
 		return
-	var pips := ""
-	for k in max_hp:
-		pips += "#" if k < hp else "-"
-	boss_label.text = "BOSS: %s   [%s]" % [name, pips]
+	boss_label.text = "BOSS: %s" % name
+	boss_bar.visible = true
+	if boss_bar.get_child_count() != max_hp:
+		for c in boss_bar.get_children():
+			c.queue_free()
+		var pip_w := clampf(360.0 / maxf(max_hp, 1) - 4.0, 14.0, 60.0)
+		for k in max_hp:
+			var pip := Panel.new()
+			pip.custom_minimum_size = Vector2(pip_w, 18)
+			pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var sb := StyleBoxFlat.new()
+			sb.set_corner_radius_all(4)
+			sb.border_color = Color(0.05, 0.05, 0.1)
+			sb.set_border_width_all(2)
+			pip.add_theme_stylebox_override("panel", sb)
+			boss_bar.add_child(pip)
+	for k in boss_bar.get_child_count():
+		var sb: StyleBoxFlat = boss_bar.get_child(k).get_theme_stylebox("panel")
+		sb.bg_color = Color(1, 0.3, 0.75) if k < hp else Color(0.18, 0.12, 0.2, 0.8)
 
 
 func flash() -> void:
@@ -384,27 +427,114 @@ func _draw_minimap() -> void:
 
 
 func popup(text: String, color: Color, screen_pos: Vector2, size := 36) -> void:
-	var l := _label(text, size, color, screen_pos - Vector2(250, 24), Vector2(500, 48), HORIZONTAL_ALIGNMENT_CENTER, null, true)
+	# Keep popups below the boss bar and clear of the banner, and nudge them off any popup already up
+	var top := 170.0 if boss_bar.visible else 110.0
+	var y := maxf(screen_pos.y, top)
+	if banner_panel.visible:
+		var band := Rect2(banner_panel.position - Vector2(0, 30), banner_panel.size + Vector2(0, 60))
+		if y > band.position.y and y < band.end.y:
+			y = band.end.y
+	popups = popups.filter(func(p) -> bool: return is_instance_valid(p))
+	for attempt in 6:
+		var clash := false
+		for p in popups:
+			var pc: Vector2 = p.position + Vector2(250, 24)
+			if absf(pc.x - screen_pos.x) < 260.0 and absf(pc.y - y) < 44.0:
+				clash = true
+				break
+		if not clash:
+			break
+		y += 46.0
+	var l := _label(text, size, color, Vector2(screen_pos.x, y) - Vector2(250, 24), Vector2(500, 48), HORIZONTAL_ALIGNMENT_CENTER, null, true)
+	popups.append(l)
 	l.pivot_offset = Vector2(250, 24)
 	l.scale = Vector2.ONE * 1.6
-	l.rotation = randf_range(-0.12, 0.12)
+	l.rotation = randf_range(-0.08, 0.08)
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(l, "scale", Vector2.ONE, 0.15)
-	tw.tween_property(l, "position:y", l.position.y - 70.0, 1.1)
+	tw.tween_property(l, "position:y", l.position.y - 50.0, 1.1)
 	tw.tween_property(l, "modulate:a", 0.0, 0.5).set_delay(0.6)
 	tw.chain().tween_callback(l.queue_free)
 
 
-func banner(text: String, duration: float) -> void:
+## Training Day: a step of advice with its button, top centre. Empty text hides it.
+var coach_box: PanelContainer
+
+
+func coach(text: String, action := "") -> void:
+	if coach_box == null:
+		coach_box = PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.05, 0.05, 0.12, 0.8)
+		sb.border_color = Color(1, 0.86, 0.15)
+		sb.set_border_width_all(3)
+		sb.set_corner_radius_all(14)
+		sb.content_margin_left = 22
+		sb.content_margin_right = 22
+		sb.content_margin_top = 8
+		sb.content_margin_bottom = 8
+		coach_box.add_theme_stylebox_override("panel", sb)
+		coach_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(coach_box)
+	for c in coach_box.get_children():
+		c.queue_free()
+	coach_box.visible = text != ""
+	if text == "":
+		return
+	var row: Control
+	if action != "":
+		row = Prompt.make(action, text, 34, 28)
+	else:
+		row = _label(text, 28, Color.WHITE, Vector2.ZERO, Vector2.ZERO, HORIZONTAL_ALIGNMENT_CENTER, null, true)
+		row.get_parent().remove_child(row)
+	coach_box.add_child(row)
+	coach_box.reset_size()
+	await get_tree().process_frame
+	if is_instance_valid(coach_box):
+		coach_box.position = Vector2(640 - coach_box.size.x / 2.0, 104)
+		coach_box.pivot_offset = coach_box.size / 2.0
+		coach_box.scale = Vector2.ONE * 1.15
+		create_tween().tween_property(coach_box, "scale", Vector2.ONE, 0.2)
+
+
+## Shows a big message in the middle of the screen. Only one shows at a time: the rest wait their turn.
+func banner(text: String, duration: float, urgent := false) -> void:
+	if banner_busy and not urgent:
+		for q in banner_queue:
+			if q[0] == text:
+				return
+		if banner_queue.size() < 3:
+			banner_queue.append([text, duration])
+		return
+	banner_busy = true
+	if banner_tw != null and banner_tw.is_valid():
+		banner_tw.kill()
 	banner_label.text = text
 	banner_label.visible = true
-	banner_label.pivot_offset = Vector2(600, 75)
-	banner_label.scale = Vector2.ONE * 1.4
-	var tw := create_tween()
-	tw.tween_property(banner_label, "scale", Vector2.ONE, 0.2)
-	tw.tween_interval(duration)
-	tw.tween_callback(func() -> void: banner_label.visible = false)
+	var lines := text.count("\n") + 1
+	var h := 26.0 + lines * (48.0 if not two else 42.0)
+	banner_label.position = Vector2(40, 270 - h / 2.0)
+	banner_label.size = Vector2(1200, h)
+	banner_label.pivot_offset = Vector2(600, h / 2.0)
+	banner_label.scale = Vector2.ONE * 1.3
+	var tw_w := minf(banner_label.get_theme_font("font").get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, banner_label.get_theme_font_size("font_size")).x + 80.0, 1180.0)
+	banner_panel.position = Vector2(640 - tw_w / 2.0, 270 - h / 2.0)
+	banner_panel.size = Vector2(tw_w, h)
+	banner_panel.visible = true
+	banner_tw = create_tween()
+	banner_tw.tween_property(banner_label, "scale", Vector2.ONE, 0.2)
+	banner_tw.tween_interval(duration)
+	banner_tw.tween_callback(_banner_done)
+
+
+func _banner_done() -> void:
+	banner_label.visible = false
+	banner_panel.visible = false
+	banner_busy = false
+	if not banner_queue.is_empty():
+		var next: Array = banner_queue.pop_front()
+		get_tree().create_timer(0.25, false).timeout.connect(func() -> void: banner(next[0], next[1]))
 
 
 func show_pause(paused: bool) -> void:

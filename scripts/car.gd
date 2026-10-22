@@ -678,7 +678,7 @@ func _update_heckle() -> void:
 		var tw := create_tween().set_loops(5)
 		tw.tween_property(driver_arm, "rotation:x", 0.6, 0.12)
 		tw.tween_property(driver_arm, "rotation:x", -0.6, 0.12)
-		Audio.voice("%s_%d" % [heckle_voice, i], main.rng.randf_range(0.92, 1.1))
+		Audio.voice("%s_%d" % [heckle_voice, i], main.rng.randf_range(0.96, 1.05))
 		main.on_heckled(self, w)
 
 

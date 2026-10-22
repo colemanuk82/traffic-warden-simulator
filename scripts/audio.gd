@@ -219,13 +219,18 @@ func sting(name: String) -> void:
 
 
 ## Plays a random line from a voice group ("heckle", "driver_oi", "punched", "warden_oof"...).
-func voice(group: String, pitch := 1.0, volume := 1.0, interrupt := true) -> void:
+## who: -1 any speaker, 0 a man, 1 a woman (takes 0-1 are men, takes 2-3 women, no number counts as 0).
+func voice(group: String, pitch := 1.0, volume := 1.0, interrupt := true, who := -1) -> void:
 	var files: Array = _voice_files.get(group, [])
 	if files.is_empty():
 		# "punched" picks from any punched_* line
 		for g in _voice_files:
 			if g.begins_with(group):
 				files.append_array(_voice_files[g])
+	if who >= 0:
+		var matching := files.filter(func(f: String) -> bool: return _take_is_woman(f) == (who == 1))
+		if not matching.is_empty():
+			files = matching
 	if files.is_empty():
 		return
 	if _voice.playing and not interrupt:
@@ -234,6 +239,11 @@ func voice(group: String, pitch := 1.0, volume := 1.0, interrupt := true) -> voi
 	_voice.pitch_scale = pitch
 	_voice.volume_db = _db(volume)
 	_voice.play()
+
+
+static func _take_is_woman(path: String) -> bool:
+	var parts := path.get_file().get_basename().split("_")
+	return parts.size() > 1 and parts[-1].is_valid_int() and int(parts[-1]) >= 2
 
 
 ## A looping car stereo that plays from a moving car (attach the returned player to it).

@@ -10,12 +10,16 @@ with a mate, and spend your wages on gadgets, upgrades, weapons and a wardrobe f
 
 You can also double-click **Play Traffic Warden.bat** directly. An Xbox controller works everywhere, including all the menus; plug it in before or after starting.
 
+The game opens on a title screen. The first time you play, it asks for your name and then starts **Training
+Day**, a short coached shift that shows you how to spot a bad parker, write a ticket and leg it. You can
+replay it any time from the main menu.
+
 The first time you play, the game asks for your name. It goes on your warden ID card and on the high score
 boards, so you are never asked again after a shift. Player 2 is asked once, the first time you start a two
 player game. Change either name from **Change Name** on the main menu or **Player 2 Name** on the Two Player screen.
 
 ## Menus and settings
-- **Main menu**: Play (shifts, events, endless, two player, challenges), Your Warden (career, shop, wardrobe, unlockables, high scores) and Extras (settings, controls, jukebox, change name, credits, quit).
+- **Main menu**: Play (shifts, Training Day, events, endless, two player, challenges), Your Warden (career, shop, wardrobe, unlockables, high scores) and Extras (settings, controls, jukebox, change name, credits, quit).
 - **Settings** (main menu and pause menu): master, music, effects, voices and car stereo volumes; soundtrack (Classic, Rock & Metal, or a shuffle of both); fullscreen, V-Sync, frame rate limit, graphics quality (Low / Medium / High), FPS counter, screen shake and camera distance. Reset Progress (press twice) is on the main menu version only.
 - **Jukebox**: play any track from the soundtrack.
 
@@ -111,13 +115,19 @@ but are not saved; the Unlockables screen lists what each one needs (stars, tick
 Progress saves automatically to `%APPDATA%\Godot\app_userdata\Traffic Warden Sim\save.cfg`.
 
 ## Audio
-All music, sound effects and voices were generated for this game by `tools/gen_audio.py` and
-`tools/gen_audio_extra.py` (the rock and metal tracks, car stereos, dog barks, women's voices and the
-family-friendly heckles), synthesised with numpy/scipy, voices from espeak-ng. "Here Comes the Bride" (Wagner, 1850)
-and "Jingle Bells" (Pierpont, 1857) are public domain melodies. Re-run the scripts to regenerate everything.
+Music and sound effects were generated for this game by `tools/gen_audio.py`, `tools/gen_audio_extra.py`
+(rock and metal tracks, car stereos, dog barks) and `tools/gen_animals.py` (cats and garden birds),
+synthesised with numpy/scipy. "Here Comes the Bride" (Wagner, 1850) and "Jingle Bells" (Pierpont, 1857)
+are public domain melodies.
+
+Every voice line (drivers, hecklers, the announcer, kids, Santa, bosses) comes from `tools/gen_voices.py`,
+which reads the scripts with the Kokoro-82M neural text-to-speech model (Apache License 2.0) offline, using
+a cast of British men's and women's voices. Takes 0 and 1 of each line are men, takes 2 and 3 are women, so
+women drivers shout in a woman's voice. Re-run the scripts to regenerate everything.
 
 ## Credits
 - Fonts: Luckiest Guy by Astigmatic (Apache License 2.0) and Lilita One by Juan Montoreano (SIL Open Font License 1.1). Licence files are in `fonts/`.
+- Voices: Kokoro-82M by hexgrad (Apache License 2.0), run offline to record the lines.
 - Engine: Godot Engine (MIT licence). The full credits, including Godot's licence text, are on the in-game Credits screen.
 - Everything else (code, models built from primitives, audio) was made for this project.
 
@@ -126,4 +136,9 @@ Level quotas, timers, star scores, weather lists and hills (`terrain`) are in `s
 shapes are in `scripts/terrain.gd` and the houses, shops and parks in `scripts/scenery.gd`. Scoring is at the top of
 `scripts/main.gd`; movement in `scripts/warden.gd`; cars in `scripts/car.gd`; drivers in `scripts/driver.gd`;
 unlock requirements in `scripts/catalogue.gd`; ranks, gadgets, upgrades, weapons, events and bosses in
-`scripts/career.gd`; challenges in `scripts/challenges.gd`.
+`scripts/career.gd`; challenges in `scripts/challenges.gd`; birds and cats in `scripts/wildlife.gd`.
+
+Pacing lives in `scripts/main.gd` (`_features`, `QUIET_START`, `EVENT_GAP`): nothing big happens in the first
+30 seconds of a shift, big moments are at least 40 seconds apart, and the first career levels add one thing
+at a time (Pleasant Street is just cars, drivers and the needle; Market Crossroads adds pigeons and full
+heckling; Seaside Prom adds trolleys, the ice cream van and bosses; storms start at Snowy Village).
