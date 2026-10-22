@@ -1,27 +1,117 @@
-# Traffic Warden Sim
+<p align="center">
+  <img src="icon.png" width="128" alt="Traffic Warden Sim icon">
+</p>
 
-A top-down cartoon traffic warden game for Godot 4.3+. Climb the ranks from Trainee Warden to Chief Parking
-Enforcer across a dozen levels (including Halloween and Christmas Eve) and four special events, take on boss drivers, play endless mode or split-screen
-with a mate, and spend your wages on gadgets, upgrades, weapons and a wardrobe full of unlockables.
+<h1 align="center">TRAFFIC WARDEN SIM</h1>
+<p align="center"><b>Ticket. Dodge. Punch. Repeat.</b></p>
 
-## Quick start (no setup)
-1. Double-click **Create Desktop Shortcut.bat** once. A "Traffic Warden Sim" icon appears on your desktop.
-2. Double-click that icon to play. It finds Godot 4.3+ on your PC, or downloads a portable copy into the `godot` folder here on the first run (about 55 MB).
+<p align="center">
+  <a href="https://github.com/colemanuk82/traffic-warden-simulator/releases/latest"><b>Download for Windows</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://paypal.me/colemanuk82">Buy the dev a cuppa</a>
+</p>
 
-You can also double-click **Play Traffic Warden.bat** directly. An Xbox controller works everywhere, including all the menus; plug it in before or after starting.
+![Title screen](docs/screenshots/title-screen.jpg)
 
-The game opens on a title screen. The first time you play, it asks for your name and then starts **Training
-Day**, a short coached shift that shows you how to spot a bad parker, write a ticket and leg it. You can
-replay it any time from the main menu.
+Somebody has to do it. Somebody has to stand in the drizzle with a ticket machine and a high-vis vest while
+Gary from number 42 leaves his hatchback on the double yellows "for literally one minute, mate".
 
-The first time you play, the game asks for your name. It goes on your warden ID card and on the high score
-boards, so you are never asked again after a shift. Player 2 is asked once, the first time you start a two
-player game. Change either name from **Change Name** on the main menu or **Player 2 Name** on the Two Player screen.
+That somebody is **you**.
 
-## Menus and settings
-- **Main menu**: Play (shifts, Training Day, events, endless, two player, challenges), Your Warden (career, shop, wardrobe, unlockables, high scores) and Extras (settings, controls, jukebox, change name, credits, quit).
-- **Settings** (main menu and pause menu): master, music, effects, voices and car stereo volumes; soundtrack (Classic, Rock & Metal, or a shuffle of both); fullscreen, V-Sync, frame rate limit, graphics quality (Low / Medium / High), FPS counter, screen shake and camera distance. Reset Progress (press twice) is on the main menu version only.
-- **Jukebox**: play any track from the soundtrack.
+Traffic Warden Sim is a top-down cartoon game about the most hated job in Britain. Prowl a dozen streets,
+spot the dodgy parkers, write tickets before the drivers come back, and leg it when they do. Climb from
+lowly Trainee Warden to **Chief Parking Enforcer**, spend your wages on Turbo Shoes and a wet fish, and take
+on the Lord Mayor's limo. Then do it all again in the snow.
+
+## Download and play
+
+1. Grab **TrafficWardenSim-1.0.0-setup.exe** from the [latest release](https://github.com/colemanuk82/traffic-warden-simulator/releases/latest).
+2. Run it. You get a Start Menu entry, a desktop icon (if you want one) and a proper uninstaller.
+3. Sign on for your first shift.
+
+Don't fancy installing? Get the **portable zip** from the same page, unzip it anywhere, and double-click
+`TrafficWardenSim.exe`. No Godot, no faff, nothing else needed.
+
+Windows 10 or 11, 64-bit, and any graphics card from the last ten years or so. Windows might give you a
+blue "Windows protected your PC" box because the game isn't signed by a big company. Click **More info**
+then **Run anyway**. We promise it only bites drivers.
+
+## What's in the van
+
+- **12 streets to patrol**: leafy suburbs, a seaside prom, a neon city in the rain, posh avenues, a
+  supermarket car park, a multi-storey, hills so steep you'll need a sit down, plus **Spooky Hollow** for Halloween
+  and **Christmas Eve** in the town square.
+- **The ticket needle**: stop it in the green for a PERFECT write. Miss and you'll be fumbling while the
+  driver jogs back with a coffee and a grudge.
+- **Drivers with excuses**: two dozen voiced reasons why it's not their fault. "I was only here for a minute."
+  "Where else am I meant to park?" You've heard them all. Now hear them again.
+- **Self defence**: drivers chase you. You can punch them. They go flying and see stars. It's that kind of game.
+- **Boss drivers**: the Lord Mayor and his bodyguards, White Van Man (who moves on every few seconds) and a
+  getaway car that bolts if it hears you running.
+- **Weather**: rain, storms, snow, blizzards, fog and wind. Cars aim for puddles to soak you on purpose.
+- **Gadgets and gear**: wheel clamps, a tow truck, a camera van, and a Depot full of upgrades and weapons,
+  from a rolled-up newspaper to a traffic cone.
+- **Wardrobe**: hats, vests, caps, specs and haircuts. Look the part while being hated.
+- **Hecklers**: Tipsy Terry, Dodgy Dave and Stag Do Steve, plus passing cars yelling "get a proper job!".
+  Blow your whistle to shoo them.
+- **Pigeons, cats, dog walkers, runaway trolleys, ice cream vans, carol singers, trick-or-treaters,
+  and Santa parking his sleigh on the yellows.** Ticket it. Then run.
+- **Two player split-screen**: team up in Co-op or settle it once and for all in a Ticket Race.
+- **Endless mode, daily and weekly challenges, Golden Tickets, top-5 high score boards and medals.**
+- **Full Xbox controller support**, menus and all. Plug a pad in whenever you like.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/pleasant-street.jpg" alt="Pleasant Street, a sunny afternoon"></td>
+    <td><img src="docs/screenshots/seaside-prom.jpg" alt="Seaside Prom"></td>
+  </tr>
+  <tr>
+    <td align="center">Pleasant Street. Your first beat. Lovely, isn't it.</td>
+    <td align="center">Seaside Prom. Lovely day for a ticket.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/neon-city-rain.jpg" alt="Neon City in the rain"></td>
+    <td><img src="docs/screenshots/spooky-hollow.jpg" alt="Spooky Hollow at Halloween"></td>
+  </tr>
+  <tr>
+    <td align="center">Neon City. It's always raining in Neon City.</td>
+    <td align="center">Spooky Hollow. Keep some sweets handy.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/christmas-eve.jpg" alt="Christmas Eve in the town square"></td>
+    <td><img src="docs/screenshots/hilltop-village.jpg" alt="Hilltop Village"></td>
+  </tr>
+  <tr>
+    <td align="center">Christmas Eve. Even Santa isn't above the law.</td>
+    <td align="center">Hilltop Village. Sheep, hay bales and a bus in the bus stop.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/car-park.jpg" alt="SuperSave Car Park, writing a ticket"></td>
+    <td><img src="docs/screenshots/multi-storey.jpg" alt="Multi-Storey car park in the fog"></td>
+  </tr>
+  <tr>
+    <td align="center">SuperSave Car Park. Stop the needle in the green.</td>
+    <td align="center">The Multi-Storey. Ramps, fog and nowhere to hide.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/split-screen-race.jpg" alt="Two player split-screen Ticket Race"></td>
+    <td><img src="docs/screenshots/wardrobe.jpg" alt="Wardrobe"></td>
+  </tr>
+  <tr>
+    <td align="center">Ticket Race. Friendships have ended over less.</td>
+    <td align="center">The Wardrobe. Dress for the job you want.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/main-menu.jpg" alt="Main menu"></td>
+    <td><img src="docs/screenshots/single-player.jpg" alt="Single Player menu"></td>
+  </tr>
+  <tr>
+    <td align="center">The main menu, with your warden ID card.</td>
+    <td align="center">Single Player: shifts, events, endless and more.</td>
+  </tr>
+</table>
 
 ## Controls
 | Action | Keyboard / mouse | Xbox controller |
@@ -43,42 +133,50 @@ On-screen prompts switch between keyboard keys and Xbox buttons depending on wha
 the pad. With no pads, player 2 uses the arrow keys and numpad (1 ticket, 2 punch, 3 whistle, 0 sprint,
 . dive, 4 / 5 gadget).
 
-## Modes
-- **Career**: every shift pays wages (score / 10) and XP. XP raises your rank, and ranks unlock gadgets.
-- **Special events**: Bin Strike, Wedding Day, Match Day and the Christmas Market, unlocked with stars.
-- **Endless**: one-minute waves with a rising quota. Miss a wave and the shift is over.
-- **Two player**: Co-op (shared, bigger quota) or Ticket Race (most tickets wins).
-- **Daily and weekly challenges** pay bonus wages and XP. **Records** keeps a top-5 board for every level and mode, with initials, plus medals for your best time to quota.
+## The menu
 
-## Career
-| Rank | XP | Unlocks |
-|---|---|---|
-| Trainee Warden | 0 | |
-| Warden | 1,500 | Wheel clamp (3 per shift): the car can't leave, ticket it at leisure |
-| Senior Warden | 5,000 | Tow truck (1 per shift): big points, the car is gone |
-| Sergeant Warden | 10,000 | Camera van (1 per shift): tickets offenders nearby by itself |
-| Inspector | 18,000 | +1 use of every gadget, inspector hat |
-| Chief Parking Enforcer | 30,000 | Chief uniform |
+- **Single Player**: Start Shift, Training Day, Special Events, Endless Mode, Challenges and your Career.
+- **Multiplayer**: Co-op Shift, Ticket Race, Player 2's wardrobe and name.
+- **Unlockables**: Wardrobe, The Depot (shop), Golden Tickets, All Unlockables and the Jukebox.
+- **Scoreboard**: High Scores, Stars and Medals, and Your Stats (tickets written, drivers punched, times splashed...).
+- **Extras**: Settings, Controls, Change Name, Credits and Clock Off.
 
-**The Depot** sells upgrades (Turbo Shoes, Bigger Ticket Book, Megaphone, Tea Flask, Gadget Belt, Council Bike)
-and weapons (Rolled-up Newspaper, Ticket Printer, Walkie-Talkie, Brolly, Wet Fish, Traffic Cone). Each weapon
-has its own reach and knock-back; the printer fines drivers who chase you, the walkie-talkie calls backup,
-and the brolly keeps you dry from puddle splashes.
+## The rules of the road
 
-## On the street
-- **Boss drivers**: the Lord Mayor (with bodyguards), White Van Man (moves on every few seconds) and the getaway car (bolts if you sprint near it). Each takes several tickets.
-- **Vehicles**: hatchbacks, sports cars, 4x4s, vans, motorbikes and buses that stop at bus stops. Parking in a bus stop is an offence, and so is a disabled bay without a blue badge.
-- **Street events**: pigeons to scatter, runaway shopping trolleys to stop, and an ice cream van to chase for a speed boost.
-- **Street characters**: Tipsy Terry, Dodgy Dave and Stag Do Steve wander about heckling. Whistle to shoo them.
-- **Pickups**: coffee and energy drinks for speed. Three Golden Tickets hide on every level; collecting them unlocks wardrobe items.
-- **Weather**: drivers swerve through puddles to splash you in the rain (dive to dodge), and storms bring lightning with a warning ring. At night you carry a torch.
-- **Shortcuts**: footpaths and walkways cut between the roads.
-- **Halloween (Spooky Hollow)**: kids in costumes come trick-or-treating. If you have a sweet they take it and give you a treat (points, speed, extra time); with no sweets left you get tricked (egged, toilet papered, laces tied or a jump scare). Pick up pumpkin buckets for more sweets, whistle to send kids away, and ticket the Haunted Hearse for a bonus. Drivers shout "It's Halloween, give us a break!".
-- **Christmas Eve**: Santa's sleigh flies over dropping presents (most are good, some are lumps of coal) and sometimes lands on the yellows: ticket it for +250, then run from Santa. Carol singers make you sing along, elves put you on the naughty list, and drivers shout "Come on, it's Christmas!".
-- **Neighbourhoods**: every street is lined with houses and shops, with parks of mown grass, trees, blossom, flower beds, benches and duck ponds. Locals walk their dogs (the dogs bark at you; you can't ticket a dog). On the Halloween and Christmas levels the houses and parks are decorated.
-- **Car stereos**: some passing cars blast rock, metal, rave or bass as they go by, bouncing on their suspension.
+- Illegal cars flash a yellow **!** when you're close: parked on **double yellows**, in a bay with an
+  **EXPIRED** meter, in a bus stop, or in a disabled bay with no blue badge.
+- Walk up, press Ticket, stop the needle. A ticket is 100 points; chain them for combos up to x3.
+- Ticket a legal car and it's -150 and a stern word from the council.
+- Get caught by an angry driver: -50 and three seconds seeing stars. Dive past them for a close-call bonus.
+- Punch a driver who's chasing you: +50 for self defence. Punch a car: nothing happens, but you'll feel better.
+- Hit the quota before the clock runs out to earn stars. Stars unlock new streets.
 
-## Levels
+## Support the game
+
+Traffic Warden Sim is free. If it made you laugh, or made you feel a tiny bit sorry for the next warden you
+see, you can buy the developer a cuppa:
+
+**[paypal.me/colemanuk82](https://paypal.me/colemanuk82)**
+
+There's a button for it on the main menu too. No pressure. Well, a little bit of pressure. We do write tickets.
+
+## For the nerds
+
+Made in **Godot 4.3** with GDScript. Everything (streets, cars, people, animals) is built from code at
+runtime; the music, sound effects and voices were generated for the game.
+
+**Play from source:** clone the repo and double-click `Create Desktop Shortcut.bat` once, then the new desktop
+icon. It finds Godot 4.3+ on your PC or downloads a portable copy into `godot/` on the first run. Or open the
+folder in the Godot 4.3 editor and press F5.
+
+**Build the release:** `tools/build_release.sh 1.0.0` (needs Godot 4.3 as `$GODOT` with the 4.3 export
+templates, plus NSIS's `makensis` and `zip`). It exports `TrafficWardenSim.exe` with everything packed inside
+(audio and fonts are packed as raw files because the game loads them at runtime), then makes the portable zip
+and the installer from `installer/installer.nsi`. Output lands in `build/release/`.
+
+Your career, wages and wardrobe save to `%APPDATA%\Godot\app_userdata\Traffic Warden Sim\save.cfg`.
+
+### The beats
 Unlock each level with stars (1 star = quota met, 2 and 3 stars for high scores).
 
 | Level | Shape | Look | Stars to unlock |
@@ -99,22 +197,22 @@ Unlock each level with stars (1 star = quota met, 2 and 3 stars for high scores)
 Each shift rolls the weather from that level's list: sunny, rain (slippery), thunderstorm (slippery, lightning),
 snow (slower), blizzard, fog or blustery wind.
 
-## Rules
-- Illegal cars show a pulsing yellow **!** when you are near: parked on **double yellows**, or in a white bay with an **EXPIRED** meter. Meters show their paid time when you are close, and paid cars can expire while you watch.
-- Stand by a car and press Ticket. Stop the needle in the green for a PERFECT (quicker write, +50).
-- Ticket: 100 points. Tickets within 10s of each other build a combo (x1.5, x2, x3).
-- Ticketing a legal car: -150. Getting caught by an angry driver: -50 and 3s stunned. Diving past a driver: +25 close call.
-- Punching a driver who is chasing you: +50 self defence. They go flying, see stars and limp back to their car. You can punch cars too. It doesn't achieve much.
-- Passing drivers heckle you. Every heckle counts towards unlocks.
-- The minimap (bottom right) shows parked cars (white) and angry drivers (red).
+### Climbing the ranks
+| Rank | XP | Unlocks |
+|---|---|---|
+| Trainee Warden | 0 | |
+| Warden | 1,500 | Wheel clamp (3 per shift): the car can't leave, ticket it at leisure |
+| Senior Warden | 5,000 | Tow truck (1 per shift): big points, the car is gone |
+| Sergeant Warden | 10,000 | Camera van (1 per shift): tickets offenders nearby by itself |
+| Inspector | 18,000 | +1 use of every gadget, inspector hat |
+| Chief Parking Enforcer | 30,000 | Chief uniform |
 
-## Wardrobe and unlockables
-Pick a character type, skin tone, haircut, hair colour, uniform, hat, equipment vest and accessory (including
-baseball caps). Player 2 has their own outfit: switch with Q / R or LB / RB. Locked items can be tried on
-but are not saved; the Unlockables screen lists what each one needs (stars, tickets, punches, heckles and so on).
-Progress saves automatically to `%APPDATA%\Godot\app_userdata\Traffic Warden Sim\save.cfg`.
+**The Depot** sells upgrades (Turbo Shoes, Bigger Ticket Book, Megaphone, Tea Flask, Gadget Belt, Council Bike)
+and weapons (Rolled-up Newspaper, Ticket Printer, Walkie-Talkie, Brolly, Wet Fish, Traffic Cone). Each weapon
+has its own reach and knock-back; the printer fines drivers who chase you, the walkie-talkie calls backup,
+and the brolly keeps you dry from puddle splashes.
 
-## Audio
+### Audio
 Music and sound effects were generated for this game by `tools/gen_audio.py`, `tools/gen_audio_extra.py`
 (rock and metal tracks, car stereos, dog barks) and `tools/gen_animals.py` (cats and garden birds),
 synthesised with numpy/scipy. "Here Comes the Bride" (Wagner, 1850) and "Jingle Bells" (Pierpont, 1857)
@@ -125,13 +223,7 @@ which reads the scripts with the Kokoro-82M neural text-to-speech model (Apache 
 a cast of British men's and women's voices. Takes 0 and 1 of each line are men, takes 2 and 3 are women, so
 women drivers shout in a woman's voice. Re-run the scripts to regenerate everything.
 
-## Credits
-- Fonts: Luckiest Guy by Astigmatic (Apache License 2.0) and Lilita One by Juan Montoreano (SIL Open Font License 1.1). Licence files are in `fonts/`.
-- Voices: Kokoro-82M by hexgrad (Apache License 2.0), run offline to record the lines.
-- Engine: Godot Engine (MIT licence). The full credits, including Godot's licence text, are on the in-game Credits screen.
-- Everything else (code, models built from primitives, audio) was made for this project.
-
-## Tuning
+### Tuning
 Level quotas, timers, star scores, weather lists and hills (`terrain`) are in `scripts/levels.gd`; the hill
 shapes are in `scripts/terrain.gd` and the houses, shops and parks in `scripts/scenery.gd`. Scoring is at the top of
 `scripts/main.gd`; movement in `scripts/warden.gd`; cars in `scripts/car.gd`; drivers in `scripts/driver.gd`;
@@ -142,3 +234,9 @@ Pacing lives in `scripts/main.gd` (`_features`, `QUIET_START`, `EVENT_GAP`): not
 30 seconds of a shift, big moments are at least 40 seconds apart, and the first career levels add one thing
 at a time (Pleasant Street is just cars, drivers and the needle; Market Crossroads adds pigeons and full
 heckling; Seaside Prom adds trolleys, the ice cream van and bosses; storms start at Snowy Village).
+
+### Credits
+- Fonts: Luckiest Guy by Astigmatic (Apache License 2.0) and Lilita One by Juan Montoreano (SIL Open Font License 1.1). Licence files are in `fonts/`.
+- Voices: Kokoro-82M by hexgrad (Apache License 2.0), run offline to record the lines.
+- Engine: Godot Engine (MIT licence). The full credits, including Godot's licence text, are on the in-game Credits screen.
+- Everything else (code, models built from primitives, audio) was made for this project.
