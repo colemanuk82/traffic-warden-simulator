@@ -1,0 +1,25 @@
+; Engine configuration file.
+; Open this folder in Godot 4.3 or newer.
+
+config_version=5
+
+[application]
+
+config/name="Traffic Warden Sim"
+run/main_scene="res://menu.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+
+[autoload]
+
+Game="*res://scripts/game.gd"
+Audio="*res://scripts/audio.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+anti_aliasing/quality/msaa_3d=2
