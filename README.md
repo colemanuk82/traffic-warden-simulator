@@ -1,4 +1,11 @@
 <p align="center">
+  <img src="docs/promo.gif" width="720" alt="Traffic Warden Sim in action: perfect tickets, punching, puddle splashes, a boss, Santa's sleigh, trick-or-treaters and the 2-player race">
+</p>
+<p align="center">
+  <a href="docs/promo.mp4"><b>▶ Watch the trailer with sound (MP4)</b></a>
+</p>
+
+<p align="center">
   <img src="icon.png" width="128" alt="Traffic Warden Sim icon">
 </p>
 
@@ -9,10 +16,6 @@
   <a href="https://github.com/colemanuk82/traffic-warden-simulator/releases/latest"><b>Download for Windows</b></a>
   &nbsp;·&nbsp;
   <a href="https://paypal.me/colemanuk82">Buy the dev a cuppa</a>
-</p>
-
-<p align="center">
-  <img src="docs/promo.gif" width="720" alt="Traffic Warden Sim in action: perfect tickets, punching, puddle splashes, a boss, Santa's sleigh, trick-or-treaters and the 2-player race">
 </p>
 
 <table>
