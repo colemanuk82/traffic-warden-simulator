@@ -12,7 +12,7 @@ const CLOSE_CALL_RANGE := 2.0
 const KNOCK_TIME := 3.0
 # [text bubble, voice group]
 const SHOUTS := [
-	["Oi!", "driver_oi"], ["You what?!", "driver_what"], ["I was only here for a minute!", "driver_minute"],
+	["You what?!", "driver_what"], ["I was only here for a minute!", "driver_minute"],
 	["Where else am I meant to park?!", "driver_where"], ["You're a chicken man!", "driver_chicken"],
 	["Jobsworth!", "driver_jobsworth"], ["Come 'ere!", "driver_comehere"], ["I was only 2 minutes!", "driver_minutes"],
 	["#@%&!", ""],
@@ -32,6 +32,20 @@ const EXCUSES := [
 	["I pay my road tax, you know!", "driver_x_roadtax"], ["I was helping my nan with her shopping!", "driver_x_nan"],
 	["I got lost looking for the car park!", "driver_x_lost"], ["I was just getting change!", "driver_x_change"],
 ]
+# Recently used excuses, so the same one doesn't come round again too soon
+static var _recent_excuses: Array = []
+
+
+## A random excuse that none of the last few drivers used.
+static func pick_excuse() -> Array:
+	var fresh := EXCUSES.filter(func(e: Array) -> bool: return not e[1] in _recent_excuses)
+	var line: Array = fresh[randi() % fresh.size()]
+	_recent_excuses.append(line[1])
+	if _recent_excuses.size() > EXCUSES.size() / 2:
+		_recent_excuses.pop_front()
+	return line
+
+
 const SANTA_SHOUTS := [["HO HO NO!", "santa_hohoho"], ["Naughty list for YOU!", "santa_naughty"],
 	["I've got a schedule to keep!", "santa_naughty"]]
 
@@ -144,12 +158,14 @@ func _physics_process(delta: float) -> void:
 		shout_timer -= delta
 		if shout_timer <= 0.0:
 			shout_timer = randf_range(1.8, 2.8)
-			var pool: Array = SHOUTS + EXCUSES
+			var pool: Array = SHOUTS
 			if santa:
 				pool = SANTA_SHOUTS
 			elif main.level.has("driver_shouts") and randf() < 0.5:
 				pool = main.level.driver_shouts
 			var line: Array = pool[randi() % pool.size()]
+			if pool == SHOUTS and randf() < 0.65:
+				line = pick_excuse()
 			if line[1] == "driver_oi" and car != null and is_instance_valid(car) and car.kind == "motorbike":
 				line = ["Hey, that's my bike!", "driver_bike"]
 			shout(line[0])

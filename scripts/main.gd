@@ -490,9 +490,15 @@ func _spawn_driver(car, target) -> void:
 	elif car.kind == "motorbike":
 		_popup("Hey, that's my BIKE!", Color(1, 0.35, 0.3), d.global_position, 30)
 		Audio.voice("driver_bike", d.pitch, 1.0, true, int(d.female))
-	else:
+	elif rng.randf() < 0.08:
 		_popup("Oi! That's MY car!", Color(1, 0.35, 0.3), d.global_position, 30)
 		Audio.voice("driver_oi", d.pitch, 1.0, true, int(d.female))
+	else:
+		# Mostly they come back with an excuse; the speech bubble waits until it's been said
+		var excuse: Array = d.pick_excuse()
+		_popup(excuse[0], Color(1, 0.35, 0.3), d.global_position, 26)
+		Audio.voice(excuse[1], d.pitch, 1.0, true, int(d.female))
+		d.shout_timer = 3.0
 
 
 func _spawn_bodyguards(car) -> void:
