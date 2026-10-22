@@ -11,7 +11,16 @@
   <a href="https://paypal.me/colemanuk82">Buy the dev a cuppa</a>
 </p>
 
-![Title screen](docs/screenshots/title-screen.jpg)
+<table>
+  <tr>
+    <td><img src="docs/screenshots/title-screen.jpg" alt="Title screen"></td>
+    <td><img src="docs/screenshots/main-menu.jpg" alt="Main menu"></td>
+  </tr>
+  <tr>
+    <td align="center">The title screen. Rules is rules.</td>
+    <td align="center">The main menu: Single Player, Multiplayer, Unlockables and Scoreboard.</td>
+  </tr>
+</table>
 
 Somebody has to do it. Somebody has to stand in the drizzle with a ticket machine and a high-vis vest while
 Gary from number 42 leaves his hatchback on the double yellows "for literally one minute, mate".
@@ -103,14 +112,6 @@ then **Run anyway**. We promise it only bites drivers.
     <td align="center">Ticket Race. Friendships have ended over less.</td>
     <td align="center">The Wardrobe. Dress for the job you want.</td>
   </tr>
-  <tr>
-    <td><img src="docs/screenshots/main-menu.jpg" alt="Main menu"></td>
-    <td><img src="docs/screenshots/single-player.jpg" alt="Single Player menu"></td>
-  </tr>
-  <tr>
-    <td align="center">The main menu, with your warden ID card.</td>
-    <td align="center">Single Player: shifts, events, endless and more.</td>
-  </tr>
 </table>
 
 ## Controls
@@ -140,6 +141,8 @@ the pad. With no pads, player 2 uses the arrow keys and numpad (1 ticket, 2 punc
 - **Unlockables**: Wardrobe, The Depot (shop), Golden Tickets, All Unlockables and the Jukebox.
 - **Scoreboard**: High Scores, Stars and Medals, and Your Stats (tickets written, drivers punched, times splashed...).
 - **Extras**: Settings, Controls, Change Name, Credits and Clock Off.
+
+![Single Player menu](docs/screenshots/single-player.jpg)
 
 ## The rules of the road
 
