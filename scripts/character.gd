@@ -31,6 +31,8 @@ var notepad: Node3D
 var cape: Node3D
 var weapon: Node3D
 var torch: Node3D
+var eye_whites: Array = []  # glow red in rampage mode
+var bat_swing := false  # the rampage baseball bat swings round in a big arc instead of a jab
 var height := 2.2
 var torso_r := 0.36
 var torso_h := 0.95
@@ -348,6 +350,7 @@ func _build_face(type_id: String, hr: float, skin: Color, skin_m: Material, hair
 			var eye := Util.sphere(0.12, Util.mat(dark))
 			eye.scale = Vector3(0.8, 1.3, 0.5)
 			_on_face(eye, side * _eye_x, _eye_y, 0.0)
+			eye_whites.append(eye)
 			_on_face(Util.sphere(0.03, Util.mat(Color.WHITE)), side * _eye_x + 0.03, _eye_y + 0.06, 0.04)
 		_eye_z = _face_point(_eye_x, _eye_y).z + 0.07
 		_on_face(Util.box(Vector3(hr * 0.35, 0.035, 0.03), Util.mat(Color(0.15, 0.3, 0.12))), 0, -hr * 0.42, 0.0)
@@ -355,7 +358,7 @@ func _build_face(type_id: String, hr: float, skin: Color, skin_m: Material, hair
 	# Googly eyes: white set into the face, pupil on the front
 	var eye_r := 0.06
 	for side in [-1.0, 1.0]:
-		_on_face(Util.sphere(eye_r * 1.6, Util.mat(Color.WHITE)), side * _eye_x, _eye_y, -0.03)
+		eye_whites.append(_on_face(Util.sphere(eye_r * 1.6, Util.mat(Color.WHITE)), side * _eye_x, _eye_y, -0.03))
 		_on_face(Util.sphere(eye_r, Util.mat(dark)), side * _eye_x, _eye_y, 0.035)
 		_on_face(Util.sphere(0.018, Util.mat(Color.WHITE)), side * _eye_x + 0.02, _eye_y + 0.025, 0.09)
 		# Eyebrows, slightly cross (it's a warden)
@@ -873,16 +876,34 @@ func animate(delta: float, speed: float) -> void:
 		# Fast jab out, slower pull back
 		var p := 1.0 - clampf(punch_t / 0.3, 0.0, 1.0)
 		var reach := sin(minf(p * 2.2, 1.0) * PI * 0.5) * (1.0 - smoothstep(0.55, 1.0, p))
-		arm_r.rotation.x = -PI * 0.5 * reach
-		torso.rotation.y = -0.35 * reach
+		if bat_swing:
+			# Wind up over the shoulder, then a big sweep across the front
+			arm_r.rotation.x = -PI * 0.55
+			arm_r.rotation.z = lerpf(1.3, -1.1, smoothstep(0.0, 0.45, p)) * (1.0 - smoothstep(0.6, 1.0, p))
+			torso.rotation.y = lerpf(0.6, -0.7, smoothstep(0.0, 0.45, p)) * (1.0 - smoothstep(0.6, 1.0, p))
+			if punch_t <= 0.0:
+				arm_r.rotation.z = 0.0
+		else:
+			arm_r.rotation.x = -PI * 0.5 * reach
+			torso.rotation.y = -0.35 * reach
 
 
 func punch() -> void:
 	punch_t = 0.3
 
 
+## Rampage mode: the eyes glow red.
+func set_red_eyes(on: bool) -> void:
+	for e in eye_whites:
+		if is_instance_valid(e):
+			e.material_override = Util.glow(Color(1, 0.05, 0.05), 3.0) if on else null
+
+
 ## Puts a melee weapon in the right hand (see career.gd WEAPONS). "fists" removes it.
 func set_weapon(id: String) -> void:
+	bat_swing = id == "bat"
+	if arm_r:
+		arm_r.rotation.z = 0.0
 	if weapon:
 		weapon.queue_free()
 		weapon = null
@@ -892,6 +913,14 @@ func set_weapon(id: String) -> void:
 	weapon.position = Vector3(0, -0.62, 0.05)
 	arm_r.add_child(weapon)
 	match id:
+		"bat":
+			# A big wooden baseball bat
+			var wood := Util.mat(Color(0.78, 0.55, 0.3), true)
+			var bat := Util.cylinder(0.11, 1.1, wood, Vector3(0, -0.62, 0), false, 0.05)
+			bat.rotation.x = PI
+			weapon.add_child(bat)
+			weapon.add_child(Util.sphere(0.11, wood, Vector3(0, -1.17, 0)))
+			weapon.add_child(Util.cylinder(0.06, 0.22, Util.mat(Color(0.12, 0.12, 0.14)), Vector3(0, -0.05, 0)))
 		"newspaper":
 			var roll := Util.cylinder(0.07, 0.75, Util.mat(Color(0.92, 0.92, 0.88), true), Vector3(0, -0.3, 0))
 			weapon.add_child(roll)

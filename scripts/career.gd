@@ -45,6 +45,10 @@ const WEAPONS := [
 		"desc": "Slow, heavy and hilarious.", "words": ["BONG!", "CONED!", "DOINK!", "KER-BONG!"]},
 ]
 
+# Rampage mode's baseball bat (not for sale: floor three drivers in a row to get it for a while)
+const BAT := {"id": "bat", "name": "Baseball Bat", "cost": 0, "range": 2.6, "knock": 30.0, "cooldown": 0.32,
+	"desc": "RAMPAGE!", "words": ["HOME RUN!", "BONK!", "KER-THWACK!", "BATTER UP!", "OUT OF THE PARK!"]}
+
 # Special event shifts: a base level plus overrides (see main.gd / world.gd for the keys)
 const EVENTS := [
 	{"id": "ev_binstrike", "name": "Bin Strike", "base": "pleasant", "stars_needed": 3,

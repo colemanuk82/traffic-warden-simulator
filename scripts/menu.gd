@@ -571,7 +571,7 @@ func _pick_levels(mode: String) -> void:
 
 func _start(mode: String, level := -1, event := "", training := false) -> void:
 	Audio.sfx("ui_select")
-	Audio.sfx("whistle")
+	Audio.sfx("whistle", 1.0, 0.4)
 	Game.training = training
 	Game.mode = mode
 	Game.current_event = event
@@ -842,6 +842,7 @@ func _build_unlocks() -> Control:
 	scroll.size = Vector2(760, 530)
 	scroll.follow_focus = true
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 14  # a finger drag scrolls the list, a tap still presses
 	root.add_child(scroll)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
@@ -910,6 +911,7 @@ func _unlock_row(v: VBoxContainer, kind: String, name: String, open: bool, req: 
 		b.text = "LOCKED   %s: %s  -  %s%s" % [kind, name, req, ("  (%s)" % prog) if prog != "" else ""]
 		b.modulate = Color(0.75, 0.75, 0.8)
 	b.focus_entered.connect(func() -> void: Audio.sfx("ui_move", 1.0, 0.4))
+	b.mouse_filter = Control.MOUSE_FILTER_PASS  # let touch drags reach the scroll list
 	v.add_child(b)
 
 
@@ -1108,6 +1110,7 @@ func _challenge_row(v: VBoxContainer, text: String, done: bool, prog: String) ->
 	if done:
 		b.modulate = Color(0.6, 1.0, 0.6)
 	b.focus_entered.connect(func() -> void: Audio.sfx("ui_move", 1.0, 0.4))
+	b.mouse_filter = Control.MOUSE_FILTER_PASS  # let touch drags reach the scroll list
 	v.add_child(b)
 	return b
 
@@ -1182,6 +1185,7 @@ func _build_depot() -> Control:
 	scroll.size = Vector2(800, 530)
 	scroll.follow_focus = true
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 14  # a finger drag scrolls the list, a tap still presses
 	root.add_child(scroll)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 5)
@@ -1298,7 +1302,12 @@ func _depot_row(v: VBoxContainer, text: String, desc: String, cb: Callable, affo
 	b.focus_entered.connect(func() -> void:
 		Audio.sfx("ui_move", 1.0, 0.4)
 		depot_info.text = desc)
-	b.mouse_entered.connect(func() -> void: b.grab_focus())
+	# Hovering picks a row with the mouse; on a touch screen it would yank the list about mid-drag
+	b.mouse_entered.connect(func() -> void:
+		if not Game.using_touch:
+			b.grab_focus())
+	# PASS lets a finger drag reach the scroll list (it cancels the press once the list starts moving)
+	b.mouse_filter = Control.MOUSE_FILTER_PASS
 	v.add_child(b)
 	depot_rows.append(b)
 	return b
@@ -1521,7 +1530,7 @@ func _leave_title() -> void:
 	if screen != "title":
 		return
 	Game.title_seen = true
-	Audio.sfx("whistle")
+	Audio.sfx("whistle", 1.0, 0.4)
 	if Game.profile_name == "":
 		_ask_profile(1, "training")
 	else:
