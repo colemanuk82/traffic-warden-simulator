@@ -904,11 +904,12 @@ func _build_controls() -> Control:
 	panel.custom_minimum_size = Vector2(800, 440)
 	root.add_child(panel)
 	var g := GridContainer.new()
-	g.columns = 3
-	g.add_theme_constant_override("h_separation", 40)
+	var devices := [0, 1, 2] if Game.touch_ui else [0, 1]
+	g.columns = devices.size() + 1
+	g.add_theme_constant_override("h_separation", 40 if not Game.touch_ui else 24)
 	g.add_theme_constant_override("v_separation", 6)
 	panel.add_child(g)
-	for h in ["", "Keyboard & mouse", "Xbox controller"]:
+	for h in ["", "Keyboard & mouse", "Xbox controller", "Touch screen"].slice(0, devices.size() + 1):
 		var l := Label.new()
 		l.text = h
 		l.add_theme_color_override("font_color", YELLOW)
@@ -920,7 +921,7 @@ func _build_controls() -> Control:
 		var l := Label.new()
 		l.text = r[0]
 		g.add_child(l)
-		for pad in [0, 1]:
+		for pad in devices:
 			var p := Prompt.make(r[1], "", 36)
 			p.get_child(0).force_pad = pad
 			p.get_child(0).call_deferred("_refresh")
@@ -929,6 +930,10 @@ func _build_controls() -> Control:
 	notes.text = ("Mouse: left click tickets, right click punches.  Pad: right trigger also punches, left trigger also sprints.\n"
 		+ "Two players: with two pads, one each. With one pad, player 1 uses the keyboard.\n"
 		+ "No pads: player 2 uses the arrow keys and numpad (1 ticket, 2 punch, 3 whistle, 0 sprint, . dive, 4 / 5 gadget).")
+	if Game.touch_ui:
+		notes.text = ("Touch: put your thumb anywhere on the left to walk, and push the stick past its ring to run.\n"
+			+ "Tap the buttons on screen in menus, and BACK (or the phone's back button) to go back.\n"
+			+ "A Bluetooth controller works too: the touch buttons hide while you use it.")
 	notes.add_theme_font_size_override("font_size", 18)
 	notes.position = Vector2(40, 566)
 	root.add_child(notes)
@@ -1465,7 +1470,7 @@ func _build_title() -> Control:
 	tag.size = Vector2(1280, 50)
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(tag)
-	var start := Prompt.make("ui_accept", "Press to start", 40, 30)
+	var start := Prompt.make("ui_accept", "Tap to start" if Game.touch_ui else "Press to start", 40, 30)
 	start.position = Vector2(500, 500)
 	root.add_child(start)
 	root.set_meta("start", start)

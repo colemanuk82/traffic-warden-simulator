@@ -22,8 +22,9 @@ func _ready() -> void:
 		_slider(left, row[0], row[1])
 	_choice(left, "Soundtrack", "soundtrack", ["classic", "rock", "mix"], ["Classic", "Rock & Metal", "Shuffle all"])
 	var right := _column(cols, "DISPLAY & GAMEPLAY")
-	_toggle(right, "Fullscreen", "fullscreen")
-	_toggle(right, "V-Sync", "vsync")
+	if not Game.is_mobile:
+		_toggle(right, "Fullscreen", "fullscreen")
+		_toggle(right, "V-Sync", "vsync")
 	_choice(right, "Frame rate limit", "fps_cap", [0, 30, 60, 120, 144], ["Unlimited", "30", "60", "120", "144"])
 	_choice(right, "Graphics", "quality", [0, 1, 2], Game.QUALITY_NAMES)
 	_toggle(right, "Show FPS", "show_fps")

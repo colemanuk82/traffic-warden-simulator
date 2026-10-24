@@ -1,5 +1,6 @@
 extends Control
-## An on-screen button prompt. Shows Xbox controller glyphs when a pad is in use, key caps otherwise.
+## An on-screen button prompt. Shows Xbox controller glyphs when a pad is in use, key caps otherwise,
+## and the touch buttons' names on a phone. On a phone, menu prompts (Back, tabs) can be tapped.
 
 const PAD := {
 	"ticket": "A", "whistle": "X", "dive": "B", "punch": "Y", "sprint": "LB", "pause": "MENU", "move": "LS", "gadget": "RB", "gadget_next": "VIEW",
@@ -9,13 +10,26 @@ const KEYS := {
 	"ticket": "E", "whistle": "Space", "dive": "Ctrl", "punch": "F", "sprint": "Shift", "pause": "Esc", "move": "WASD", "gadget": "G", "gadget_next": "Tab",
 	"ui_accept": "Enter", "ui_cancel": "Esc", "tab_prev": "Q", "tab_next": "R", "ui_lr": "< >", "ui_ud": "W / S",
 }
+const TOUCH := {
+	"ticket": "TICKET", "whistle": "WHISTLE", "dive": "DIVE", "punch": "PUNCH", "sprint": "RUN", "pause": "II", "move": "STICK",
+	"gadget": "GADGET", "gadget_next": "SWAP", "ui_accept": "TAP", "ui_cancel": "BACK", "tab_prev": "<", "tab_next": ">",
+	"ui_lr": "TAP", "ui_ud": "TAP",
+}
+## Actions a tap on the prompt sends on a touch screen
+const TAPPABLE := ["ui_cancel", "tab_prev", "tab_next", "pause"]
+## Same colours as the matching on-screen touch buttons
+const TOUCH_COLORS := {
+	"ticket": Color(0.3, 0.72, 0.2), "dive": Color(0.88, 0.25, 0.2), "whistle": Color(0.2, 0.5, 1.0),
+	"punch": Color(0.95, 0.66, 0.08), "sprint": Color(0.55, 0.3, 0.85), "gadget": Color(0.1, 0.65, 0.7),
+	"gadget_next": Color(0.1, 0.5, 0.55),
+}
 const FACE_COLORS := {
 	"A": Color(0.38, 0.78, 0.2), "B": Color(0.92, 0.25, 0.2), "X": Color(0.2, 0.5, 1.0), "Y": Color(1.0, 0.78, 0.1),
 }
 
 var action := "ticket"
 var glyph_size := 34.0
-var force_pad := -1  # -1 follow the last device, 0 keyboard, 1 pad
+var force_pad := -1  # -1 follow the last device, 0 keyboard, 1 pad, 2 touch
 
 
 static func make(act: String, text: String, size := 34.0, font_size := 24) -> HBoxContainer:
@@ -45,9 +59,29 @@ func _pad() -> bool:
 	return Game.using_pad if force_pad < 0 else force_pad == 1
 
 
+func _touch() -> bool:
+	return force_pad == 2 or Game.using_touch and force_pad < 0
+
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		accept_event()
+		Game.send_action(action)
+
+
 func _refresh() -> void:
 	var w := glyph_size
-	if not _pad():
+	var tappable := _touch() and force_pad < 0 and action in TAPPABLE
+	mouse_filter = Control.MOUSE_FILTER_STOP if tappable else Control.MOUSE_FILTER_IGNORE
+	if tappable:
+		# The box this prompt sits in ignores the mouse; let taps through to the glyph
+		var p := get_parent() as Control
+		if p:
+			p.mouse_filter = Control.MOUSE_FILTER_PASS
+	if _touch():
+		var label: String = TOUCH.get(action, action)
+		w = maxf(glyph_size * 1.2, Game.font_body.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, int(glyph_size * 0.45)).x + 22.0)
+	elif not _pad():
 		var label: String = KEYS.get(action, action)
 		w = maxf(glyph_size, Game.font_body.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, int(glyph_size * 0.5)).x + 16.0)
 	elif PAD.get(action, "") in ["LB", "RB"]:
@@ -61,6 +95,18 @@ func _draw() -> void:
 	var s := glyph_size
 	var font: Font = Game.font_body
 	var dark := Color(0.12, 0.12, 0.16)
+	if _touch():
+		var label: String = TOUCH.get(action, action)
+		var r := Rect2(Vector2.ZERO, size)
+		var col: Color = TOUCH_COLORS.get(action, Color(0.2, 0.2, 0.26))
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = col.darkened(0.15)
+		sb.border_color = Color(1, 1, 1, 0.9)
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(int(s * 0.5))
+		draw_style_box(sb, r)
+		_text(label, r.size / 2.0, int(s * 0.45), Color.WHITE, font)
+		return
 	if not _pad():
 		var label: String = KEYS.get(action, action)
 		var r := Rect2(Vector2.ZERO, size)

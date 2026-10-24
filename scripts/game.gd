@@ -13,6 +13,11 @@ const STAT_KEYS := ["tickets", "punches", "perfects", "heckles", "shifts", "clos
 const BOARD_SIZE := 5
 
 var using_pad := false
+## Phones and tablets (or --touch on the command line) get the on-screen touch controls.
+var touch_ui := false
+## The last input came from the touch screen, so prompts show the touch buttons.
+var using_touch := false
+var is_mobile := false
 var font_title: FontFile
 var font_body: FontFile
 var theme: Theme
@@ -62,6 +67,13 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	for k in STAT_KEYS:
 		stats[k] = 0
+	is_mobile = OS.has_feature("mobile")
+	touch_ui = is_mobile or "--touch" in OS.get_cmdline_user_args()
+	using_touch = touch_ui
+	if is_mobile:
+		# Phones start on Medium graphics at 60 fps; the player can change it in Settings
+		settings.quality = 1
+		settings.fps_cap = 60
 	_setup_inputs()
 	_load_fonts()
 	theme = _build_theme()
@@ -78,6 +90,8 @@ func _ready() -> void:
 	if not "rank:0" in announced:
 		announced.append("rank:0")
 	using_pad = not Input.get_connected_joypads().is_empty()
+	if using_pad:
+		using_touch = false
 	Input.joy_connection_changed.connect(_on_joy_changed)
 	_build_overlay()
 	get_viewport().gui_focus_changed.connect(_on_focus_changed)
@@ -112,6 +126,12 @@ func _setup_inputs() -> void:
 	_extend_action("ui_down", [_key(KEY_S), _axis(JOY_AXIS_LEFT_Y, 1.0), _button(JOY_BUTTON_DPAD_DOWN)])
 	_extend_action("ui_accept", [_button(JOY_BUTTON_A)])
 	_extend_action("ui_cancel", [_button(JOY_BUTTON_B)])
+	if touch_ui:
+		# A tap is also sent as a left click, which would fire a ticket on every touch of the screen
+		for act in ["ticket", "punch"]:
+			for ev in InputMap.action_get_events(act):
+				if ev is InputEventMouseButton:
+					InputMap.action_erase_event(act, ev)
 
 
 func _add_action(action: String, events: Array) -> void:
@@ -201,15 +221,47 @@ func _axis(axis: JoyAxis, value: float) -> InputEventJoypadMotion:
 
 func _input(event: InputEvent) -> void:
 	var pad := using_pad
+	var touch := using_touch
 	if event is InputEventJoypadButton:
 		pad = true
+		touch = false
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:
 		pad = true
-	elif event is InputEventKey or event is InputEventMouseButton:
+		touch = false
+	elif event is InputEventKey and event.keycode != KEY_BACK:
 		pad = false
-	if pad != using_pad:
+		touch = false
+	elif event is InputEventMouseButton and not touch_ui:
+		pad = false
+	elif event is InputEventScreenTouch and touch_ui:
+		pad = false
+		touch = true
+	if pad != using_pad or touch != using_touch:
 		using_pad = pad
+		using_touch = touch
 		device_changed.emit(using_pad)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		# The Android back button: pause during a shift, otherwise act like Back / Esc
+		var scene := get_tree().current_scene
+		var in_shift: bool = scene != null and scene.get("state") == "playing" and not get_tree().paused
+		send_action("pause" if in_shift else "ui_cancel")
+	elif what == NOTIFICATION_APPLICATION_PAUSED:
+		var scene := get_tree().current_scene
+		if scene != null and scene.get("state") == "playing" and not get_tree().paused:
+			scene.set_paused(true)
+
+
+## Sends a press and release of an action through the normal input path, as if a key was hit.
+func send_action(action: String) -> void:
+	for down in [true, false]:
+		var ev := InputEventAction.new()
+		ev.action = action
+		ev.pressed = down
+		ev.strength = 1.0 if down else 0.0
+		Input.parse_input_event(ev)
 
 
 func _on_joy_changed(_device: int, connected: bool) -> void:
@@ -294,7 +346,7 @@ func _style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
 func apply_settings() -> void:
 	var headless := DisplayServer.get_name() == "headless"
 	var mode := DisplayServer.WINDOW_MODE_FULLSCREEN if settings.fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
-	if DisplayServer.window_get_mode() != mode and not headless:
+	if DisplayServer.window_get_mode() != mode and not headless and not is_mobile:
 		DisplayServer.window_set_mode(mode)
 	if not headless:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if settings.vsync else DisplayServer.VSYNC_DISABLED)
@@ -305,6 +357,14 @@ func apply_settings() -> void:
 	vp.scaling_3d_scale = 0.75 if q == 0 else 1.0
 	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if q == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
 	RenderingServer.directional_shadow_atlas_set_size(4096 if q >= 2 else 2048, true)
+	if is_mobile:
+		# Phone screens have far more pixels than the GPU can fill at 60 fps, so below High the
+		# whole game is drawn at 720p and scaled up. Shadows stay small and MSAA stays off.
+		var win := get_tree().root
+		win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS if q >= 2 else Window.CONTENT_SCALE_MODE_VIEWPORT
+		vp.msaa_3d = Viewport.MSAA_DISABLED
+		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+		RenderingServer.directional_shadow_atlas_set_size(2048 if q >= 2 else 1024, true)
 	if _fps_label:
 		_fps_label.visible = settings.show_fps
 	var audio := get_node_or_null("/root/Audio")
