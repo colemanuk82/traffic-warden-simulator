@@ -15,8 +15,14 @@ const TRACKS := [
 	["wedding", "Here Comes the Bride", "event"], ["matchday", "Match Day", "event"], ["xmas", "Jingle Bells", "event"],
 	["rock", "Heavy Fine", "rock"], ["rock2", "Clamp Boogie", "rock"], ["metal", "Tow Truck of Doom", "rock"],
 	["metal2", "Warden of Steel", "rock"], ["punk", "No Parking (Anarchy)", "rock"], ["synthwave", "Neon Ticket", "classic"],
+	["death_menu", "Clocking On (Death Mix)", "theme"], ["death", "Double Yellow Death", "death"],
+	["death2", "Clamped in Darkness", "death"], ["death3", "Pay and Display of Doom", "death"],
+	["thrash", "Speed Camera", "rock"], ["doom", "Yellow Line Doom", "rock"], ["groove", "Wheel Clamp Groove", "rock"],
+	["black", "Frostbitten Parking Meter", "rock"], ["metalcore", "Breakdown Lane", "rock"],
+	["numetal", "Bounce Bay", "rock"], ["hardcore", "Hi-Vis Hardcore", "rock"], ["grunge", "Rain on the Windscreen", "rock"],
+	["stoner", "Desert Car Park", "rock"], ["glam", "Hazard Lights", "rock"],
 ]
-const STEREOS := ["radio_rock", "radio_metal", "radio_rave", "radio_bass"]
+const STEREOS := ["radio_rock", "radio_metal", "radio_rave", "radio_bass", "radio_death"]
 
 var _cache := {}
 var _music_a: AudioStreamPlayer
@@ -121,14 +127,17 @@ func set_volumes(music: float, sfx: float) -> void:
 
 # ---------------------------------------------------------------- music
 
-## Swaps level music for the player's chosen soundtrack style ("classic", "rock" or "mix").
+## Swaps level music for the player's chosen soundtrack style ("death", "rock", "classic" or "mix").
 func _resolve(name: String) -> String:
-	var style: String = Game.settings.get("soundtrack", "classic")
+	var style: String = Game.settings.get("soundtrack", "death")
+	if name == "menu" and style in ["death", "rock"]:
+		return "death_menu"
 	if style == "classic" or name in ["menu", "boss", "wedding", "matchday", "xmas"] or name.begins_with("sting"):
 		return name
 	var pool := []
 	for t in TRACKS:
-		if (style == "rock" and t[2] == "rock") or (style == "mix" and t[2] in ["classic", "rock"]):
+		if (style == "death" and t[2] == "death") or (style == "rock" and t[2] in ["rock", "death"]) \
+				or (style == "mix" and t[2] in ["classic", "rock", "death"]):
 			pool.append(t[0])
 	if pool.is_empty():
 		return name
@@ -161,6 +170,11 @@ func play_music(name: String, fade := 1.0, exact := false) -> void:
 
 func current_music() -> String:
 	return _current_music
+
+
+## True while a track picked in the jukebox is playing (the menu leaves it on).
+func jukebox_pick() -> bool:
+	return _current_music != "" and _requested_music == ""
 
 
 func stop_music(fade := 0.6) -> void:

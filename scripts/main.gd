@@ -24,6 +24,9 @@ const WRONG_PENALTY := 150
 const HIT_PENALTY := 50
 const CLOSE_CALL_BONUS := 25
 const PUNCH_BONUS := 50
+const PERFECT_PUNCH_BONUS := 25
+const PUNCH_ASSIST := 2.0  # punches auto-aim (with a quick lunge) at drivers this much past the weapon's reach
+const PUNCH_SWEET := 0.9  # a charging driver this close to the weapon's reach is a perfectly timed punch
 const PRINTER_BONUS := 75
 const SPLASH_PENALTY := 20
 const COMBO_WINDOW := 10.0
@@ -80,6 +83,8 @@ class Player extends RefCounted:
 	var uses := {}
 	var shake := 0.0
 	var sweets := 0  # Halloween: one sweet per trick-or-treater gets you a treat
+	var punch_state := 0  # 0 nobody to punch, 1 a driver in reach, 2 perfect timing (the touch button glows too)
+	var punch_rings: Array = []  # [in reach, perfect] rings drawn under the driver a punch would hit
 
 
 var rng := RandomNumberGenerator.new()
@@ -694,8 +699,10 @@ func _update_ticketing(p: Player, delta: float) -> void:
 		_cancel_write(p, "Dropped the notepad!")
 	if not p.writing:
 		var target = _find_ticket_target(p)
-		var punchable = _find_punch_target(w)
-		if punchable != null:
+		_update_punch_ring(p)
+		if p.punch_state == 2:
+			hud.set_hint(p.index, "PUNCH NOW!", "punch")
+		elif p.punch_state == 1:
 			hud.set_hint(p.index, "Punch!", "punch")
 		elif target != null:
 			hud.set_hint(p.index, "Write ticket", "ticket")
@@ -708,6 +715,7 @@ func _update_ticketing(p: Player, delta: float) -> void:
 		return
 
 	hud.set_hint(p.index, "")
+	_update_punch_ring(p)
 	if not is_instance_valid(p.write_car) or not p.write_car.is_parked():
 		_cancel_write(p, "They drove off!")
 		return
@@ -767,18 +775,61 @@ func _find_ticket_target(p: Player):
 	return best
 
 
-func _find_punch_target(w):
-	var origin: Vector3 = w.global_position
+static func _flat_dist(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
+## The driver a punch from this warden would auto-aim at: the nearest one in reach, whichever way
+## the warden faces. Drivers charging at you come first.
+func punch_target(w):
+	var reach: float = float(w.weapon.range) + PUNCH_ASSIST
 	var best = null
-	var best_d: float = float(w.weapon.range) + 0.6
+	var best_score := INF
 	for d in get_tree().get_nodes_in_group("drivers"):
 		if not d.can_be_punched():
 			continue
-		var dist: float = origin.distance_to(d.global_position)
-		if dist < best_d:
-			best_d = dist
+		var dist := _flat_dist(w.global_position, d.global_position)
+		if dist > reach:
+			continue
+		var score := dist - (1.0 if d.is_chasing() else 0.0)
+		if score < best_score:
+			best_score = score
 			best = d
 	return best
+
+
+## True when a driver is charging in and about to come into reach (so an early punch is held for them).
+func driver_incoming(w) -> bool:
+	var reach: float = float(w.weapon.range) + PUNCH_ASSIST + 3.0
+	for d in get_tree().get_nodes_in_group("drivers"):
+		if d.is_chasing() and _flat_dist(w.global_position, d.global_position) < reach:
+			return true
+	return false
+
+
+func _perfect_timing(w, d) -> bool:
+	return d.is_chasing() and _flat_dist(w.global_position, d.global_position) <= float(w.weapon.range) + PUNCH_SWEET
+
+
+## A glowing ring under the driver a punch would hit: yellow in reach, green (and pulsing) for perfect timing.
+func _update_punch_ring(p: Player) -> void:
+	var w = p.warden
+	if p.punch_rings.is_empty():
+		for col in [Color(1, 0.8, 0.0), Color(0.1, 0.9, 0.2)]:
+			var ring := Util.torus(0.62, 1.0, Util.glow(col, 0.8))
+			ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			ring.visible = false
+			add_child(ring)
+			p.punch_rings.append(ring)
+	var d = punch_target(w) if state == "playing" and not w.is_busy() else null
+	p.punch_state = 0 if d == null else (2 if _perfect_timing(w, d) else 1)
+	for i in 2:
+		var ring: MeshInstance3D = p.punch_rings[i]
+		ring.visible = p.punch_state == i + 1
+		if ring.visible:
+			ring.global_position = d.global_position + Vector3(0, 0.08, 0)
+			var pulse := 1.0 + 0.15 * sin(elapsed * (18.0 if i == 1 else 8.0))
+			ring.scale = Vector3(pulse, 1.0, pulse)
 
 
 func _start_write(p: Player, car) -> void:
@@ -1568,29 +1619,36 @@ func warden_punch(w) -> void:
 	var origin: Vector3 = w.punch_origin()
 	var hit := false
 	var words: Array = wp.words
-	for d in get_tree().get_nodes_in_group("drivers"):
-		if d.can_be_punched() and origin.distance_to(d.global_position) < float(wp.range):
-			var chasing: bool = d.is_chasing()
-			var floored: bool = d.punched(w.global_position, float(wp.knock))
-			hit = true
-			if floored:
-				p.punches += 1
-			_shake(p, 0.4)
-			var pos: Vector3 = d.global_position + Vector3(0, 2.4, 0)
-			_popup(words[rng.randi() % words.size()], Color(1, 0.95, 0.3), pos, 56)
-			if chasing and floored:
-				p.score += PUNCH_BONUS
-				_popup("SELF DEFENCE  +%d" % PUNCH_BONUS, Color(0.5, 0.85, 1), pos + Vector3(0, -1.2, 0), 28)
-			if chasing and wp.id == "printer":
-				p.score += PRINTER_BONUS
-				_popup("PRINTED A FINE  +%d" % PRINTER_BONUS, Color(1, 0.9, 0.5), pos + Vector3(0, -2.2, 0), 26)
-			if wp.id == "walkie":
-				_popup("BACKUP!", Color(0.6, 0.9, 1), w.global_position + Vector3(0, 3.0, 0), 36)
-				Audio.voice("warden_backup")
-				for other in get_tree().get_nodes_in_group("drivers"):
-					if other != d and other.global_position.distance_to(w.global_position) < 10.0:
-						other.startle(3.0)
-			break
+	# Auto-aim: turn to the nearest driver in reach and step into the punch, so it always lands
+	var d = punch_target(w)
+	if d != null:
+		var perfect := _perfect_timing(w, d)
+		w.lunge(d.global_position, maxf(_flat_dist(w.global_position, d.global_position) - 1.1, 0.0))
+		var chasing: bool = d.is_chasing()
+		var floored: bool = d.punched(w.global_position, float(wp.knock) * (1.3 if perfect else 1.0))
+		hit = true
+		if floored:
+			p.punches += 1
+		_shake(p, 0.55 if perfect else 0.4)
+		var pos: Vector3 = d.global_position + Vector3(0, 2.4, 0)
+		_popup(words[rng.randi() % words.size()], Color(1, 0.95, 0.3), pos, 64 if perfect else 56)
+		if perfect:
+			p.score += PERFECT_PUNCH_BONUS
+			_popup("PERFECT PUNCH!  +%d" % PERFECT_PUNCH_BONUS, Color(0.4, 1, 0.45), pos + Vector3(0, 1.0, 0), 34)
+			Audio.sfx("ding", 1.2)
+			_hit_stop()
+		if chasing and floored:
+			p.score += PUNCH_BONUS
+			_popup("SELF DEFENCE  +%d" % PUNCH_BONUS, Color(0.5, 0.85, 1), pos + Vector3(0, -1.2, 0), 28)
+		if chasing and wp.id == "printer":
+			p.score += PRINTER_BONUS
+			_popup("PRINTED A FINE  +%d" % PRINTER_BONUS, Color(1, 0.9, 0.5), pos + Vector3(0, -2.2, 0), 26)
+		if wp.id == "walkie":
+			_popup("BACKUP!", Color(0.6, 0.9, 1), w.global_position + Vector3(0, 3.0, 0), 36)
+			Audio.voice("warden_backup")
+			for other in get_tree().get_nodes_in_group("drivers"):
+				if other != d and other.global_position.distance_to(w.global_position) < 10.0:
+					other.startle(3.0)
 	if not hit:
 		for ped in get_tree().get_nodes_in_group("pedestrians"):
 			if ped.can_be_punched() and origin.distance_to(ped.global_position) < float(wp.range):
@@ -1615,6 +1673,19 @@ func warden_punch(w) -> void:
 			Audio.voice("warden_hiyah")
 	else:
 		Audio.sfx("punch_swing", rng.randf_range(0.9, 1.15))
+
+
+## A split-second freeze on a perfect punch, so it feels like it really connected.
+func _hit_stop() -> void:
+	if players.size() > 1:
+		return
+	Engine.time_scale = 0.15
+	await get_tree().create_timer(0.07, true, false, true).timeout
+	Engine.time_scale = 1.0
+
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 
 
 func on_heckled(_source, _w) -> void:
