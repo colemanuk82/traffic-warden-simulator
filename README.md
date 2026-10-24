@@ -41,7 +41,7 @@ on the Lord Mayor's limo. Then do it all again in the snow.
 
 ## Download and play
 
-1. Grab **TrafficWardenSim-1.0.0-setup.exe** from the [latest release](https://github.com/colemanuk82/traffic-warden-simulator/releases/latest).
+1. Grab **TrafficWardenSim-1.2.0-setup.exe** from the [latest release](https://github.com/colemanuk82/traffic-warden-simulator/releases/latest).
 2. Run it. You get a Start Menu entry, a desktop icon (if you want one) and a proper uninstaller.
 3. Sign on for your first shift.
 
@@ -55,7 +55,7 @@ then **Run anyway**. We promise it only bites drivers.
 ### On an Android phone
 
 1. On your phone, open the [latest release](https://github.com/colemanuk82/traffic-warden-simulator/releases/latest)
-   and tap **TrafficWardenSim-1.1.0.apk** to download it.
+   and tap **TrafficWardenSim-1.2.0.apk** to download it.
 2. Open the download. Android will ask to let your browser (or Files app) **install unknown apps**: allow it.
 3. Tap **Install**, then **Open**. Play Protect may say it doesn't recognise the app: tap **More details**,
    then **Install anyway**.
@@ -63,6 +63,13 @@ then **Run anyway**. We promise it only bites drivers.
 Android 5 or newer with OpenGL ES 3.0, which covers pretty much any phone from the last eight years.
 Turn the phone sideways. Your left thumb drives the warden (put it down anywhere on the left half), and the
 big buttons on the right do the rest. A Bluetooth controller works too.
+
+### Staying up to date
+
+The game checks for a new version when it starts. If there is one, a green **UPDATE AVAILABLE** button
+appears on the main menu and takes you straight to the right download (the installer on Windows, the APK on
+Android). It needs the internet for a second and keeps quiet if you're offline. Turn it off in
+**Settings > Check for updates**.
 
 ## What's in the van
 
@@ -73,7 +80,14 @@ big buttons on the right do the rest. A Bluetooth controller works too.
   driver jogs back with a coffee and a grudge.
 - **Drivers with excuses**: two dozen voiced reasons why it's not their fault. "I was only here for a minute."
   "Where else am I meant to park?" You've heard them all. Now hear them again.
+- **Drivers with opinions**: nearly thirty cheeky, family-friendly insults, shouted by men and women.
+  "You absolute plonker!" "Bog off, you lemon!" "Robocop on a budget!"
 - **Self defence**: drivers chase you. You can punch them. They go flying and see stars. It's that kind of game.
+  Punches aim themselves at the nearest driver and you lunge in to land them. A yellow ring shows who you'd
+  hit, and it turns green for a **PERFECT PUNCH** (extra points, extra knock-back, a lovely crunch).
+- **A death metal soundtrack**, growled lyrics and all ("TICKET OF DOOM!"), plus thrash, doom, groove,
+  black metal, metalcore, nu-metal, hardcore punk, grunge, stoner and glam rock. Prefer the old tunes? Pick
+  **Classic** in Settings, or try any track in the Jukebox.
 - **Boss drivers**: the Lord Mayor and his bodyguards, White Van Man (who moves on every few seconds) and a
   getaway car that bolts if it hears you running.
 - **Weather**: rain, storms, snow, blizzards, fog and wind. Cars aim for puddles to soak you on purpose.
@@ -175,7 +189,8 @@ the pad. With no pads, player 2 uses the arrow keys and numpad (1 ticket, 2 punc
 - Walk up, press Ticket, stop the needle. A ticket is 100 points; chain them for combos up to x3.
 - Ticket a legal car and it's -150 and a stern word from the council.
 - Get caught by an angry driver: -50 and three seconds seeing stars. Dive past them for a close-call bonus.
-- Punch a driver who's chasing you: +50 for self defence. Punch a car: nothing happens, but you'll feel better.
+- Punch a driver who's chasing you: +50 for self defence, +25 more for a perfect punch when the ring is green.
+  Press a bit early and the punch waits for them. Punch a car: nothing happens, but you'll feel better.
 - Hit the quota before the clock runs out to earn stars. Stars unlock new streets.
 
 ## Support the game
@@ -201,7 +216,7 @@ templates, plus NSIS's `makensis` and `zip`). It exports `TrafficWardenSim.exe` 
 (audio and fonts are packed as raw files because the game loads them at runtime), then makes the portable zip
 and the installer from `installer/installer.nsi`. Output lands in `build/release/`.
 
-**Build for Android:** `tools/build_android.sh 1.1.0` makes a signed APK in `build/release/`. It needs the
+**Build for Android:** `tools/build_android.sh 1.2.0` makes a signed APK in `build/release/`. It needs the
 4.3 export templates and an Android SDK path in Godot's editor settings with `apksigner` (the Ubuntu `apksigner`
 package is enough). The signing key is never in the repo: pass it with `ANDROID_KEYSTORE`, `ANDROID_KEY_ALIAS`
 and `ANDROID_KEY_PASSWORD`, and keep using the same one, because Android only installs updates signed with it.
@@ -248,7 +263,8 @@ and the brolly keeps you dry from puddle splashes.
 
 ### Audio
 Music and sound effects were generated for this game by `tools/gen_audio.py`, `tools/gen_audio_extra.py`
-(rock and metal tracks, car stereos, dog barks) and `tools/gen_animals.py` (cats and garden birds),
+(rock and metal tracks, car stereos, dog barks), `tools/gen_audio_metal.py` (the death metal soundtrack with
+growled vocals, and ten more rock and metal styles) and `tools/gen_animals.py` (cats and garden birds),
 synthesised with numpy/scipy. "Here Comes the Bride" (Wagner, 1850) and "Jingle Bells" (Pierpont, 1857)
 are public domain melodies.
 

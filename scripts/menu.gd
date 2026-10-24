@@ -54,6 +54,7 @@ var now_playing: Label
 var credits_text: Label
 var credits_scroll := 0.0
 var quit_box: Control
+var update_btn: Button
 
 
 func _ready() -> void:
@@ -83,9 +84,19 @@ func _ready() -> void:
 		_ask_profile(1, "main")
 	else:
 		_show("main")
-	if Audio.current_music() == "" or Audio.current_music() in ["street", "seaside", "snow", "night", "posh"]:
+	if not Audio.jukebox_pick():
 		Audio.play_music("menu")
+	Updater.check()
 	Audio.play_ambience("birds")
+
+
+func _show_update(version: String) -> void:
+	update_btn.text = "UPDATE AVAILABLE!  v%s\nTap here to download" % version if Game.using_touch \
+		else "UPDATE AVAILABLE!  v%s\nSelect to download" % version
+	update_btn.visible = true
+	update_btn.modulate.a = 0.0
+	create_tween().tween_property(update_btn, "modulate:a", 1.0, 0.4)
+	Audio.sfx("ding", 1.1, 0.6)
 
 
 func _rebuild_figure() -> void:
@@ -353,6 +364,26 @@ func _build_main() -> Control:
 	support.focus_neighbor_bottom = support.get_path_to(settings_btn)
 	support.focus_neighbor_left = support.get_path_to(settings_btn)
 	settings_btn.focus_neighbor_top = settings_btn.get_path_to(support)
+
+	# "Update available" note under the ID card, shown when Updater finds a newer release
+	update_btn = _button("", root, func() -> void: Updater.open_download(), 350)
+	update_btn.position = Vector2(892, 292)
+	update_btn.custom_minimum_size.y = 64
+	update_btn.add_theme_font_size_override("font_size", 21)
+	for c in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+		update_btn.add_theme_color_override(c, Color.WHITE)
+	for state in ["normal", "hover", "focus", "pressed"]:
+		var ub := StyleBoxFlat.new()
+		ub.bg_color = Color(0.1, 0.45, 0.15) if state == "normal" else Color(0.15, 0.6, 0.2)
+		ub.border_color = YELLOW if state in ["focus", "hover"] else Color(0.4, 1.0, 0.5)
+		ub.set_border_width_all(4)
+		ub.set_corner_radius_all(12)
+		update_btn.add_theme_stylebox_override(state, ub)
+	update_btn.visible = false
+	update_btn.focus_neighbor_left = update_btn.get_path_to(settings_btn)
+	if Updater.has_update():
+		_show_update(Updater.latest_version)
+	Updater.update_found.connect(func(v: String, _url: String) -> void: _show_update(v))
 
 	# The warden's ID card, top right
 	var card := PanelContainer.new()
@@ -1350,23 +1381,24 @@ func _build_jukebox() -> Control:
 	now_playing.position = Vector2(44, 96)
 	root.add_child(now_playing)
 	var grid := GridContainer.new()
-	grid.columns = 3
+	grid.columns = 4
 	grid.position = Vector2(40, 146)
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 8)
 	root.add_child(grid)
-	var style_names := {"theme": "Theme", "classic": "Classic", "event": "Special event", "rock": "Rock & Metal"}
+	var style_names := {"theme": "Theme", "classic": "Classic", "event": "Special event", "rock": "Rock & Metal",
+		"death": "Death Metal"}
 	for t in Audio.TRACKS:
 		var file: String = t[0]
 		var b := _button("", grid, func() -> void:
 			Audio.play_music(file, 0.6, true)
-			_refresh_jukebox(), 390)
-		b.custom_minimum_size.y = 50
+			_refresh_jukebox(), 290)
+		b.custom_minimum_size.y = 44
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.text = "  %s" % t[1]
 		b.tooltip_text = style_names.get(t[2], "")
 		b.set_meta("file", file)
-		b.add_theme_font_size_override("font_size", 22)
+		b.add_theme_font_size_override("font_size", 18)
 	var back := _button("Done", root, _go_back, 220)
 	back.position = Vector2(40, 588)
 	root.set_meta("grid", grid)

@@ -20,7 +20,8 @@ func _ready() -> void:
 	var left := _column(cols, "SOUND")
 	for row in [["Master volume", "master"], ["Music", "music"], ["Effects", "sfx"], ["Voices", "voice"], ["Car stereos", "stereo"]]:
 		_slider(left, row[0], row[1])
-	_choice(left, "Soundtrack", "soundtrack", ["classic", "rock", "mix"], ["Classic", "Rock & Metal", "Shuffle all"])
+	_choice(left, "Soundtrack", "soundtrack", ["death", "rock", "classic", "mix"], ["Death Metal", "Rock & Metal", "Classic", "Shuffle all"])
+	_toggle(left, "Check for updates", "update_check")
 	var right := _column(cols, "DISPLAY & GAMEPLAY")
 	if not Game.is_mobile:
 		_toggle(right, "Fullscreen", "fullscreen")

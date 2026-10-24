@@ -16,7 +16,7 @@ const PAUSE_RADIUS := 32.0
 ## id, action, label, centre, radius (colours come from Prompt.TOUCH_COLORS)
 const BUTTONS := [
 	["ticket", "ticket", "TICKET", Vector2(1150, 596), 74.0],
-	["punch", "punch", "PUNCH", Vector2(1004, 636), 52.0],
+	["punch", "punch", "PUNCH", Vector2(1004, 636), 62.0],
 	["whistle", "whistle", "WHISTLE", Vector2(1024, 492), 50.0],
 	["dive", "dive", "DIVE", Vector2(1166, 436), 50.0],
 	["sprint", "sprint", "RUN", Vector2(870, 654), 46.0],
@@ -309,10 +309,15 @@ func _draw_controls() -> void:
 		var r: float = b.radius
 		var down: bool = b.finger >= 0 or (id == "sprint" and running)
 		var col: Color = Prompt.TOUCH_COLORS.get(id, Color(0.3, 0.3, 0.35))
+		if id == "punch":
+			_draw_punch_glow(c, r)
 		root.draw_circle(c + Vector2(0, 4), r, Color(0, 0, 0, 0.3))
 		root.draw_circle(c, r * (0.92 if down else 1.0), Color(col.r, col.g, col.b, 0.92 if down else 0.62))
 		root.draw_arc(c, r * (0.92 if down else 1.0), 0, TAU, 40, Color(1, 1, 1, 0.85), 3.0, true)
-		_text(b.label, c, int(clampf(r * 0.38, 15, 28)))
+		var label: String = b.label
+		if id == "punch" and _punch_state() == 2:
+			label = "NOW!"
+		_text(label, c, int(clampf(r * 0.38, 15, 28)))
 
 	if main and main.state == "playing":
 		var pc := _pause_centre()
@@ -320,6 +325,24 @@ func _draw_controls() -> void:
 		root.draw_arc(pc, PAUSE_RADIUS, 0, TAU, 32, Color(1, 1, 1, 0.8), 3.0, true)
 		for x in [-7.0, 7.0]:
 			root.draw_rect(Rect2(pc.x + x - 4, pc.y - 12, 8, 24), Color.WHITE)
+
+
+func _punch_state() -> int:
+	if main == null or main.players.is_empty():
+		return 0
+	return main.players[0].punch_state
+
+
+## The punch button lights up when a driver is in reach, and flashes green when it's the perfect moment.
+func _draw_punch_glow(c: Vector2, r: float) -> void:
+	var st := _punch_state()
+	if st == 0:
+		return
+	var t := Time.get_ticks_msec() / 1000.0
+	var col := Color(0.3, 1, 0.4) if st == 2 else Color(1, 0.85, 0.15)
+	var pulse := 0.5 + 0.5 * sin(t * (16.0 if st == 2 else 7.0))
+	root.draw_circle(c, r + 10.0 + pulse * 8.0, Color(col.r, col.g, col.b, 0.25 + 0.2 * pulse))
+	root.draw_arc(c, r + 8.0 + pulse * 8.0, 0, TAU, 48, Color(col.r, col.g, col.b, 0.9), 5.0, true)
 
 
 func _text(t: String, centre: Vector2, fs: int) -> void:

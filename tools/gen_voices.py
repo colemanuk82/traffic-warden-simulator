@@ -85,6 +85,8 @@ SAY = {
     "Ho ho no!": "Ho, ho... NO!",
     "Wahey!": "Wa-hey!",
     "Lads lads lads!": "Lads! Lads! Lads!",
+    "Bwok bwok! Chicken man!": "Bwok, bwok, bwok! Chicken man!",
+    "Robocop on a budget!": "Robo-cop, on a budget!",
     "Fa la la la la!": "Fa la la la laaa!",
 }
 
@@ -188,6 +190,9 @@ def main():
     if want("excuses"):
         for i, (key, line) in enumerate(gx.EXCUSE_LINES.items()):
             four_takes("driver_x_" + key, line, i + 1)
+    if want("insults"):
+        for i, (key, line) in enumerate(gx.INSULT_LINES.items()):
+            four_takes("driver_i_" + key, line, i + 2)
     if want("warden"):
         for key, line in ga.WARDEN_LINES.items():
             say("warden_" + key, line, WARDEN)

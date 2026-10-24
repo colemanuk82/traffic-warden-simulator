@@ -46,6 +46,38 @@ static func pick_excuse() -> Array:
 	return line
 
 
+# Cheeky insults (rude-sounding but family-friendly), voiced by two men and two women each
+const INSULTS := [
+	["You absolute plonker!", "driver_i_plonker"], ["Oi! You massive muppet!", "driver_i_muppet"],
+	["Clear off, you numpty!", "driver_i_numpty"], ["You big daft wally!", "driver_i_wally"],
+	["You jumped-up lollipop man!", "driver_i_lollipop"], ["Go on, hop it, you nitwit!", "driver_i_nitwit"],
+	["You ticket-happy goblin!", "driver_i_goblin"], ["Get a life, you parking pixie!", "driver_i_pixie"],
+	["You couldn't park a pram, you wally!", "driver_i_pram"], ["You're a walking yellow line!", "driver_i_yellowline"],
+	["Does your mum still dress you?!", "driver_i_mumdresses"],
+	["Come here, you hi-vis traffic cone!", "driver_i_cone"], ["You absolute turnip!", "driver_i_turnip"],
+	["You've got the brains of a parking meter!", "driver_i_meterbrains"],
+	["Ooh, big man with a notepad!", "driver_i_notepad"], ["Robocop on a budget!", "driver_i_robocop"],
+	["Nobody likes you, you know!", "driver_i_nobodylikes"], ["Get stuffed, you plum!", "driver_i_plum"],
+	["You utter melon!", "driver_i_melon"], ["Waste of a good jacket, you are!", "driver_i_jacket"],
+	["Bog off, you lemon!", "driver_i_lemon"], ["You great big pudding!", "driver_i_pudding"],
+	["You complete doughnut!", "driver_i_donut"], ["Do one, you sausage!", "driver_i_sausage"],
+	["I'll knock your silly hat off!", "driver_i_hat"], ["Out the way, you spanner!", "driver_i_spanner"],
+	["You great big silly billy!", "driver_i_sillybilly"], ["Get out of it, you numbskull!", "driver_i_numbskull"],
+	["Bwok bwok! Chicken man!", "driver_i_chickenagain"],
+]
+static var _recent_insults: Array = []
+
+
+## A random insult that none of the last few drivers used.
+static func pick_insult() -> Array:
+	var fresh := INSULTS.filter(func(e: Array) -> bool: return not e[1] in _recent_insults)
+	var line: Array = fresh[randi() % fresh.size()]
+	_recent_insults.append(line[1])
+	if _recent_insults.size() > INSULTS.size() / 2:
+		_recent_insults.pop_front()
+	return line
+
+
 const SANTA_SHOUTS := [["HO HO NO!", "santa_hohoho"], ["Naughty list for YOU!", "santa_naughty"],
 	["I've got a schedule to keep!", "santa_naughty"]]
 
@@ -164,8 +196,13 @@ func _physics_process(delta: float) -> void:
 			elif main.level.has("driver_shouts") and randf() < 0.5:
 				pool = main.level.driver_shouts
 			var line: Array = pool[randi() % pool.size()]
-			if pool == SHOUTS and randf() < 0.65:
-				line = pick_excuse()
+			if pool == SHOUTS:
+				# Mostly insults and excuses; the old stock shouts now and then
+				var roll := randf()
+				if roll < 0.5:
+					line = pick_insult()
+				elif roll < 0.85:
+					line = pick_excuse()
 			if line[1] == "driver_oi" and car != null and is_instance_valid(car) and car.kind == "motorbike":
 				line = ["Hey, that's my bike!", "driver_bike"]
 			shout(line[0])

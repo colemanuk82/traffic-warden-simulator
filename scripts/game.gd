@@ -35,9 +35,9 @@ var outfit2 := {
 	"uniform": "orange", "vest": "utility", "hat": "baseball", "accessory": "none",
 }
 var settings := {
-	"master": 1.0, "music": 0.7, "sfx": 0.9, "voice": 0.9, "stereo": 0.8, "soundtrack": "classic",
+	"master": 1.0, "music": 0.7, "sfx": 0.9, "voice": 0.9, "stereo": 0.8, "soundtrack": "death", "soundtrack_rev": 1,
 	"fullscreen": false, "vsync": true, "fps_cap": 0, "quality": 2, "show_fps": false,
-	"shake": true, "camera": "normal", "bike": true,
+	"shake": true, "camera": "normal", "bike": true, "update_check": true,
 }
 const QUALITY_NAMES := ["Low", "Medium", "High"]
 const CAMERA_ZOOM := {"close": 0.82, "normal": 1.0, "far": 1.22}
@@ -763,6 +763,10 @@ func load_game() -> void:
 	var st: Dictionary = cfg.get_value("player", "settings", {})
 	for k in st:
 		settings[k] = st[k]
+	# 1.2.0: death metal became the default soundtrack, so switch older saves over once
+	if int(st.get("soundtrack_rev", 0)) < 1:
+		settings.soundtrack = "death"
+		settings.soundtrack_rev = 1
 	xp = int(cfg.get_value("career", "xp", 0))
 	wages = int(cfg.get_value("career", "wages", 0))
 	upgrades = cfg.get_value("career", "upgrades", {})

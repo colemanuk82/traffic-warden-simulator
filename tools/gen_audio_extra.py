@@ -341,6 +341,40 @@ EXCUSE_LINES = {
     "change": "I was just getting change!",
 }
 
+# Angry, cheeky insults drivers shout while they chase you (1.2.0). Rude-sounding but family-friendly:
+# no swearing, no slurs, nothing about how anyone looks or who they are, just British playground name-calling.
+INSULT_LINES = {
+    "plonker": "You absolute plonker!",
+    "muppet": "Oi! You massive muppet!",
+    "numpty": "Clear off, you numpty!",
+    "wally": "You big daft wally!",
+    "lollipop": "You jumped-up lollipop man!",
+    "nitwit": "Go on, hop it, you nitwit!",
+    "goblin": "You ticket-happy goblin!",
+    "pixie": "Get a life, you parking pixie!",
+    "pram": "You couldn't park a pram, you wally!",
+    "yellowline": "You're a walking yellow line!",
+    "mumdresses": "Does your mum still dress you?!",
+    "cone": "Come here, you hi-vis traffic cone!",
+    "turnip": "You absolute turnip!",
+    "meterbrains": "You've got the brains of a parking meter!",
+    "notepad": "Ooh, big man with a notepad!",
+    "robocop": "Robocop on a budget!",
+    "nobodylikes": "Nobody likes you, you know!",
+    "plum": "Get stuffed, you plum!",
+    "melon": "You utter melon!",
+    "jacket": "Waste of a good jacket, you are!",
+    "lemon": "Bog off, you lemon!",
+    "pudding": "You great big pudding!",
+    "donut": "You complete doughnut!",
+    "sausage": "Do one, you sausage!",
+    "hat": "I'll knock your silly hat off!",
+    "spanner": "Out the way, you spanner!",
+    "sillybilly": "You great big silly billy!",
+    "numbskull": "Get out of it, you numbskull!",
+    "chickenagain": "Bwok bwok! Chicken man!",
+}
+
 
 def voices():
     voice = os.path.join(ga.ROOT, "voice")

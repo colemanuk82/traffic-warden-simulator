@@ -16,6 +16,8 @@ const STAMINA_MAX := 3.0
 const STAMINA_REGEN := 0.9
 const WHISTLE_COOLDOWN := 1.5
 const BIKE_SPEED := 12.0
+const LUNGE_TIME := 0.1
+const PUNCH_BUFFER := 0.3  # a punch pressed just early waits this long for a driver to step into reach
 
 var main
 var player := 0  # 0 single player, 1 or 2 in two player mode
@@ -41,6 +43,9 @@ var recover_timer := 0.0
 var stun_timer := 0.0
 var whistle_timer := 0.0
 var punch_timer := 0.0
+var punch_buffer := 0.0
+var lunge_timer := 0.0
+var lunge_vel := Vector3.ZERO
 var locked := false
 var speed_mult := 1.0  # weather: snow slows you down
 var grip := 1.0  # weather: rain makes you slide
@@ -154,6 +159,13 @@ func _physics_process(delta: float) -> void:
 			recover_timer = DIVE_RECOVER
 		return
 
+	if lunge_timer > 0.0:
+		lunge_timer -= delta
+		velocity = lunge_vel
+		_move()
+		visual.rotation.y = atan2(facing.x, facing.z)
+		return
+
 	if recover_timer > 0.0:
 		recover_timer -= delta
 		velocity = velocity.move_toward(Vector3.ZERO, ACCEL * delta)
@@ -195,10 +207,8 @@ func _physics_process(delta: float) -> void:
 
 	if pressed("dive"):
 		_start_dive()
-	elif pressed("punch") and punch_timer <= 0.0:
-		punch_timer = float(weapon.cooldown)
-		figure.punch()
-		main.warden_punch(self)
+	elif pressed("punch") or punch_buffer > 0.0:
+		_try_punch(delta)
 	elif pressed("whistle") and whistle_timer <= 0.0 and not locked:
 		whistle_timer = WHISTLE_COOLDOWN
 		_squash()
@@ -265,6 +275,34 @@ func stun(duration: float) -> void:
 	figure.body.position.y = 0.0
 	stars_label.visible = true
 	_squash()
+
+
+## Punches straight away, or holds a slightly early press (or one made during the cooldown) for a
+## moment so it lands the instant a charging driver comes into reach.
+func _try_punch(delta: float) -> void:
+	if pressed("punch"):
+		punch_buffer = PUNCH_BUFFER
+	else:
+		punch_buffer -= delta
+	if punch_timer > 0.0 and punch_buffer > 0.0:
+		return
+	if main.punch_target(self) == null and main.driver_incoming(self) and punch_buffer > 0.0:
+		return
+	punch_buffer = 0.0
+	if punch_timer > 0.0:
+		return
+	punch_timer = float(weapon.cooldown)
+	figure.punch()
+	main.warden_punch(self)
+
+
+## A quick step into a punch, so auto-aimed punches connect from a little further away.
+func lunge(point: Vector3, distance: float) -> void:
+	face_towards(point)
+	if distance <= 0.05:
+		return
+	lunge_timer = LUNGE_TIME
+	lunge_vel = facing * (distance / LUNGE_TIME)
 
 
 func face_towards(point: Vector3) -> void:
