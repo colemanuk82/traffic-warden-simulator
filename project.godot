@@ -6,11 +6,12 @@ config_version=5
 [application]
 
 config/name="Traffic Warden Sim"
-config/version="1.0.0"
+config/version="1.1.0"
 config/icon="res://icon.png"
 run/main_scene="res://menu.tscn"
 boot_splash/bg_color=Color(0.06, 0.05, 0.12, 1)
 boot_splash/show_image=false
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.3", "Forward Plus")
 
 [autoload]
@@ -23,7 +24,14 @@ Audio="*res://scripts/audio.gd"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
+window/handheld/orientation=4
+
+[input_devices]
+
+pointing/emulate_mouse_from_touch=true
 
 [rendering]
 
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 anti_aliasing/quality/msaa_3d=2

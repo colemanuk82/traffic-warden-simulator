@@ -52,6 +52,18 @@ Windows 10 or 11, 64-bit, and any graphics card from the last ten years or so. W
 blue "Windows protected your PC" box because the game isn't signed by a big company. Click **More info**
 then **Run anyway**. We promise it only bites drivers.
 
+### On an Android phone
+
+1. On your phone, open the [latest release](https://github.com/colemanuk82/traffic-warden-simulator/releases/latest)
+   and tap **TrafficWardenSim-1.1.0.apk** to download it.
+2. Open the download. Android will ask to let your browser (or Files app) **install unknown apps**: allow it.
+3. Tap **Install**, then **Open**. Play Protect may say it doesn't recognise the app: tap **More details**,
+   then **Install anyway**.
+
+Android 5 or newer with OpenGL ES 3.0, which covers pretty much any phone from the last eight years.
+Turn the phone sideways. Your left thumb drives the warden (put it down anywhere on the left half), and the
+big buttons on the right do the rest. A Bluetooth controller works too.
+
 ## What's in the van
 
 - **12 streets to patrol**: leafy suburbs, a seaside prom, a neon city in the rain, posh avenues, a
@@ -137,6 +149,11 @@ then **Run anyway**. We promise it only bites drivers.
 
 On-screen prompts switch between keyboard keys and Xbox buttons depending on what you touched last.
 
+**On a phone:** put your left thumb anywhere on the left half of the screen and a stick appears under it.
+Push it past the ring to run (or hold **RUN**). The right side has **TICKET**, **PUNCH**, **WHISTLE**,
+**DIVE**, plus **GADGET** and **SWAP** once you've earned a gadget. The **II** button at the top pauses.
+Menus are tap to pick, and **BACK** (or the phone's back button) goes back.
+
 **Two players (split-screen):** with two pads, one each. With one pad, player 1 uses the keyboard and player 2
 the pad. With no pads, player 2 uses the arrow keys and numpad (1 ticket, 2 punch, 3 whistle, 0 sprint,
 . dive, 4 / 5 gadget).
@@ -183,6 +200,13 @@ folder in the Godot 4.3 editor and press F5.
 templates, plus NSIS's `makensis` and `zip`). It exports `TrafficWardenSim.exe` with everything packed inside
 (audio and fonts are packed as raw files because the game loads them at runtime), then makes the portable zip
 and the installer from `installer/installer.nsi`. Output lands in `build/release/`.
+
+**Build for Android:** `tools/build_android.sh 1.1.0` makes a signed APK in `build/release/`. It needs the
+4.3 export templates and an Android SDK path in Godot's editor settings with `apksigner` (the Ubuntu `apksigner`
+package is enough). The signing key is never in the repo: pass it with `ANDROID_KEYSTORE`, `ANDROID_KEY_ALIAS`
+and `ANDROID_KEY_PASSWORD`, and keep using the same one, because Android only installs updates signed with it.
+Phones use the Compatibility (OpenGL ES 3) renderer and draw the game at 720p on Low and Medium graphics.
+For a desktop test of the touch controls, run the game with `-- --touch`.
 
 Your career, wages and wardrobe save to `%APPDATA%\Godot\app_userdata\Traffic Warden Sim\save.cfg`.
 

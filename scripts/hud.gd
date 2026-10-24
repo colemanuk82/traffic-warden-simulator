@@ -84,6 +84,9 @@ func _ready() -> void:
 		items.append(["pause", "Pause"])
 		for p in items:
 			bar.add_child(Prompt.make(p[0], p[1], 26, 18))
+		# On a phone the touch buttons carry their own names, and the stick sits where this bar is
+		bar.visible = not Game.using_touch
+		Game.device_changed.connect(func(_p: bool) -> void: bar.visible = not Game.using_touch)
 
 	banner_panel = Panel.new()
 	var bsb := StyleBoxFlat.new()
@@ -99,6 +102,8 @@ func _ready() -> void:
 
 	minimap = Control.new()
 	minimap.position = Vector2(1060, 500) if not two else Vector2(552, 540)
+	if Game.touch_ui and not two:
+		minimap.position = Vector2(1060, 84)  # the touch buttons take the bottom right
 	minimap.size = Vector2(196, 160) if not two else Vector2(176, 140)
 	minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	minimap.draw.connect(_draw_minimap)
@@ -136,13 +141,20 @@ func _build_player_ui(i: int, area: Rect2) -> Dictionary:
 		u.combo = _label("", 30, Color(1, 0.6, 0.15), Vector2(440, 60), Vector2(400, 40), HORIZONTAL_ALIGNMENT_CENTER, c, true)
 		u.combo_bar = _rect(Color(1, 0.6, 0.15), Vector2(540, 102), Vector2(200, 8), c)
 	var base_y := 604.0 if not two else 640.0
+	var status_y := base_y - 30.0
+	var gadget_y := base_y - 58.0
+	if Game.touch_ui and not two:
+		# The touch stick lives bottom left, so these readouts move up under the timer
+		base_y = 98.0
+		status_y = 146.0
+		gadget_y = 174.0
 	var sx := w - 244.0 if right else 24.0
 	_label("STAMINA", 18, Color.WHITE, Vector2(sx, base_y), Vector2(220, 24), align, c)
 	_rect(Color(0, 0, 0, 0.6), Vector2(sx, base_y + 26), Vector2(220, 18), c)
 	u.stamina = _rect(Color(0.3, 0.9, 0.4), Vector2(sx + 2, base_y + 28), Vector2(216, 14), c)
 	var tx := w - 424.0 if right else 24.0
-	u.status = _label("", 22, Color(0.6, 0.85, 1.0), Vector2(tx, base_y - 30), Vector2(400, 28), align, c, true)
-	u.gadget = _label("", 22, Color(1, 0.85, 0.4), Vector2(tx, base_y - 58), Vector2(400, 28), align, c, true)
+	u.status = _label("", 22, Color(0.6, 0.85, 1.0), Vector2(tx, status_y), Vector2(400, 28), align, c, true)
+	u.gadget = _label("", 22, Color(1, 0.85, 0.4), Vector2(tx, gadget_y), Vector2(400, 28), align, c, true)
 	var hint := HBoxContainer.new()
 	hint.position = Vector2(w / 2.0 - 200, 560 if not two else 532)
 	hint.size = Vector2(400, 44)

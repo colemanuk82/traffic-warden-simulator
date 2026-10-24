@@ -14,6 +14,7 @@ const PedestrianScript := preload("res://scripts/pedestrian.gd")
 const StreetEventScript := preload("res://scripts/street_event.gd")
 const HudScript := preload("res://scripts/hud.gd")
 const PauseScript := preload("res://scripts/pause_handler.gd")
+const TouchScript := preload("res://scripts/touch_controls.gd")
 const WeatherScript := preload("res://scripts/weather.gd")
 
 # Scoring rules (from the design doc)
@@ -232,6 +233,10 @@ func _ready() -> void:
 	hud = HudScript.new()
 	hud.main = self
 	add_child(hud)
+	if Game.touch_ui:
+		var touch := TouchScript.new()
+		touch.main = self
+		add_child(touch)
 	var info: Dictionary = WeatherScript.INFO[weather_kind]
 	var mode_name: String = {"career": "", "event": "Special event", "endless": "Endless", "coop": "Co-op", "race": "Ticket Race"}[mode]
 	var weather_name: String = info.name
