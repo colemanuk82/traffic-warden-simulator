@@ -101,6 +101,14 @@ func set_torch(on: bool) -> void:
 	figure.set_torch(on)
 
 
+## Rampage mode: swap to the baseball bat, eyes glowing red, and back again.
+func set_rampage(on: bool) -> void:
+	weapon = Career.BAT if on else Career.weapon(weapon_id)
+	figure.set_weapon("bat" if on else weapon_id)
+	figure.set_red_eyes(on)
+	punch_timer = 0.0
+
+
 func _build_bike() -> void:
 	bike = Node3D.new()
 	bike.visible = false

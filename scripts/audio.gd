@@ -20,7 +20,7 @@ const TRACKS := [
 	["thrash", "Speed Camera", "rock"], ["doom", "Yellow Line Doom", "rock"], ["groove", "Wheel Clamp Groove", "rock"],
 	["black", "Frostbitten Parking Meter", "rock"], ["metalcore", "Breakdown Lane", "rock"],
 	["numetal", "Bounce Bay", "rock"], ["hardcore", "Hi-Vis Hardcore", "rock"], ["grunge", "Rain on the Windscreen", "rock"],
-	["stoner", "Desert Car Park", "rock"], ["glam", "Hazard Lights", "rock"],
+	["stoner", "Desert Car Park", "rock"], ["glam", "Hazard Lights", "rock"], ["rampage", "Batter Up! (Rampage)", "event"],
 ]
 const STEREOS := ["radio_rock", "radio_metal", "radio_rave", "radio_bass", "radio_death"]
 

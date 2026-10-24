@@ -79,6 +79,10 @@ var bus_stopped_at := -100.0
 var stereo: AudioStreamPlayer3D  # some passing drivers blast their music
 var stereo_label: Label3D
 var stereo_t := 0.0
+var dims := {}  # body sizes, for the dents and debris when the car gets smashed
+var smash_hits := 0
+var wrecked := false
+var school_run := false  # School Patrol: a parent dropping the kids off
 
 
 func _ready() -> void:
@@ -91,6 +95,8 @@ func _ready() -> void:
 	stay_time = rng.randf_range(30.0, 60.0)
 	if not boss.is_empty():
 		stay_time = 999.0
+	if school_run:
+		stay_time = rng.randf_range(9.0, 16.0)  # just dropping the kids off...
 	if spot != null:
 		if spot.type == "meter":
 			meter_time = 0.0 if rng.randf() < expired_chance else rng.randf_range(10.0, 45.0)
@@ -213,6 +219,8 @@ func _build_visual(rng: RandomNumberGenerator) -> void:
 	var base_y := 0.25 + (wheel_r - 0.36)
 	cab_y += base_y - 0.25
 	body_mesh.add_child(Util.box(Vector3(length, body_h, width), c, Vector3(0, base_y + body_h / 2.0, 0), true))
+	dims = {"length": length, "width": width, "cab_x": cab_x, "cab_len": cab_len, "roof": cab_y + cab_h / 2.0,
+		"bonnet": base_y + body_h, "color": c, "wheel_r": wheel_r}
 	if kind != "motorbike":
 		body_mesh.add_child(Util.box(Vector3(cab_len, cab_h, width * 0.9), c.lightened(0.25) if kind not in ["limo", "bus"] else c, Vector3(cab_x, cab_y, 0), true))
 	_build_extras(c, length, cab_x, cab_len, cab_y + cab_h / 2.0, width)
@@ -420,6 +428,8 @@ func _physics_process(delta: float) -> void:
 					visual.rotation.y = 0.0
 					_show_driver(false)
 					bounce()
+					if school_run and main.has_method("on_school_drop"):
+						main.on_school_drop(self)
 		"parked":
 			_update_parked(delta)
 		"unparking":
@@ -569,6 +579,8 @@ func _in_cone(from: Vector3, fwd: Vector3, p: Vector3, reach: float, width: floa
 
 func _path_blocked() -> bool:
 	var fwd := _forward()
+	if _lollipop_ahead():
+		return true
 	for w in main.all_wardens():
 		if _in_cone(position, fwd, w.global_position, 4.4, 1.6):
 			return true
@@ -585,6 +597,15 @@ func _path_blocked() -> bool:
 			return true
 	for d in get_tree().get_nodes_in_group("drivers"):
 		if _in_cone(position, fwd, d.global_position, 3.5, 1.4):
+			return true
+	return false
+
+
+## A lollipop lady out in the road with her STOP sign, just ahead.
+func _lollipop_ahead() -> bool:
+	var fwd := _forward()
+	for b in get_tree().get_nodes_in_group("road_blockers"):
+		if b.is_stopping_traffic() and _in_cone(position, fwd, b.global_position, 7.5, 4.5):
 			return true
 	return false
 
@@ -699,7 +720,7 @@ func _on_blocked(delta: float, _parking: bool) -> void:
 	if near and blocked_time > 0.5 and honk_cooldown <= 0.0:
 		honk()
 	# Stuck behind other cars for ages (a junction jam): drive through them for a moment
-	if blocked_time > 4.0 and not near:
+	if blocked_time > 4.0 and not near and not _lollipop_ahead():
 		ghost_time = 1.5
 		blocked_time = 0.0
 
@@ -734,6 +755,209 @@ func punched(from: Vector3) -> void:
 	tw.tween_property(body_mesh, "rotation:x", 0.0, 0.15)
 	honk_cooldown = 0.0
 	honk()
+
+
+## Rampage mode: a bat to the bodywork. Dents, a cracked windscreen and flying bits; the third hit
+## wrecks it (bonnet up, a wheel rolls off, smoke). Returns true on the hit that wrecks it.
+func smash(from: Vector3) -> bool:
+	var rng: RandomNumberGenerator = main.rng
+	smash_hits += 1
+	var away := global_position - from
+	away.y = 0.0
+	var side := signf(away.dot(global_transform.basis.z))
+	if smash_hits != 3:
+		var tw := create_tween()
+		tw.tween_property(visual, "rotation:x", 0.3 * side, 0.06)
+		tw.tween_property(visual, "rotation:x", -0.15 * side, 0.1)
+		tw.tween_property(visual, "rotation:x", 0.0, 0.18)
+	bounce()
+	honk_cooldown = 0.0
+	honk()
+	var L: float = dims.length
+	var W: float = dims.width
+	var col: Color = dims.color
+	# A dent on the bonnet or roof
+	var on_roof := rng.randf() < 0.5 and kind != "motorbike"
+	var dy: float = dims.roof if on_roof else dims.bonnet
+	var dx: float = (dims.cab_x + rng.randf_range(-0.4, 0.4) * dims.cab_len) if on_roof else rng.randf_range(L * 0.2, L * 0.42)
+	var dent := Util.sphere(0.32, col.darkened(0.4), Vector3(dx, dy - 0.04, rng.randf_range(-W, W) * 0.25))
+	dent.scale = Vector3(1.3, 0.22, 1.0)
+	body_mesh.add_child(dent)
+	if smash_hits == 1 and kind != "motorbike":
+		_crack_windscreen()
+	_debris(rng, col, 6)
+	if smash_hits >= 3 and not wrecked:
+		_wreck(rng)
+		return true
+	if not wrecked:
+		shout(["MY CAR!", "NOT THE PAINTWORK!", "IT'S BRAND NEW!", "OI! MY MOTOR!"][rng.randi() % 4])
+	return false
+
+
+func _crack_windscreen() -> void:
+	var x: float = dims.cab_x + dims.cab_len / 2.0 * 0.6
+	var top: float = dims.roof + 0.03
+	var crack := Node3D.new()
+	crack.position = Vector3(x, top, 0)
+	body_mesh.add_child(crack)
+	for k in 5:
+		var line := Util.box(Vector3(0.7, 0.02, 0.05), Color(0.95, 0.97, 1.0), Vector3.ZERO)
+		line.rotation.y = k * PI / 5.0 + 0.2
+		crack.add_child(line)
+	crack.add_child(Util.sphere(0.08, Color(0.95, 0.97, 1.0), Vector3.ZERO))
+
+
+## Bits of bodywork and glass that fly off and bounce away.
+func _debris(rng: RandomNumberGenerator, col: Color, n: int) -> void:
+	for i in n:
+		var glass := i % 2 == 0
+		var bit := Util.box(Vector3(0.18, 0.06, 0.14) * rng.randf_range(0.7, 1.5), Color(0.75, 0.9, 1.0) if glass else col,
+			global_position + Vector3(0, float(dims.bonnet) + 0.3, 0))
+		bit.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		main.add_child(bit)
+		var dir := Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1)).normalized() * rng.randf_range(1.5, 3.5)
+		var land: Vector3 = bit.position + dir
+		land.y = main.world.height_at(land) + 0.05
+		var peak: Vector3 = bit.position.lerp(land, 0.5) + Vector3(0, rng.randf_range(0.8, 1.6), 0)
+		var t := bit.create_tween()
+		t.tween_property(bit, "position", peak, 0.18).set_ease(Tween.EASE_OUT)
+		t.parallel().tween_property(bit, "rotation", Vector3(rng.randf() * 6, rng.randf() * 6, rng.randf() * 6), 0.4)
+		t.tween_property(bit, "position", land, 0.22).set_ease(Tween.EASE_IN)
+		t.tween_interval(rng.randf_range(4.0, 7.0))
+		t.tween_property(bit, "scale", Vector3.ONE * 0.01, 0.4)
+		t.tween_callback(bit.queue_free)
+
+
+func _wreck(rng: RandomNumberGenerator) -> void:
+	wrecked = true
+	var L: float = dims.length
+	var W: float = dims.width
+	var col: Color = dims.color
+	shout(["MY CAR!!!", "IT'S A WRITE-OFF!", "I ONLY JUST PAID IT OFF!", "MUUUM!"][rng.randi() % 4])
+	Audio.sfx("explode", rng.randf_range(0.9, 1.05))
+	_explosion(rng)
+	# Blown into the air in a full flip, then lands squashed, lopsided and burnt black
+	var tw := create_tween()
+	tw.tween_property(visual, "position:y", 3.2, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.parallel().tween_property(visual, "rotation:x", TAU, 0.6)
+	tw.tween_property(visual, "position:y", 0.0, 0.3).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.tween_callback(func() -> void:
+		visual.rotation.x = 0.0
+		Audio.sfx("thud", 0.6, 0.9))
+	tw.tween_property(visual, "scale", Vector3(1.05, 0.82, 1.05), 0.12)
+	tw.parallel().tween_property(body_mesh, "rotation:z", 0.06, 0.12)
+	_char(body_mesh)
+	if badge_label:
+		badge_label.visible = false
+	# Flames flickering on top
+	var fire := Node3D.new()
+	fire.position = Vector3(0, float(dims.roof) + 0.3, 0)
+	body_mesh.add_child(fire)
+	for i in 4:
+		var flame := Util.sphere(0.3, Util.glow([Color(1, 0.55, 0.05), Color(1, 0.85, 0.2)][i % 2], 3.0),
+			Vector3(rng.randf_range(-L, L) * 0.25, 0, rng.randf_range(-W, W) * 0.2))
+		flame.scale = Vector3(0.8, 1.6, 0.8)
+		flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fire.add_child(flame)
+		var ft := flame.create_tween().set_loops()
+		ft.tween_property(flame, "scale", Vector3(0.6, 2.2, 0.6), rng.randf_range(0.12, 0.2))
+		ft.tween_property(flame, "scale", Vector3(0.9, 1.3, 0.9), rng.randf_range(0.12, 0.2))
+	var ff := fire.create_tween()
+	ff.tween_interval(8.0)
+	ff.tween_property(fire, "scale", Vector3.ONE * 0.01, 1.0)
+	ff.tween_callback(fire.queue_free)
+	if kind != "motorbike":
+		# Bonnet pops up
+		var bonnet := Node3D.new()
+		bonnet.position = Vector3(L * 0.5 - 0.05, dims.bonnet + 0.02, 0)
+		body_mesh.add_child(bonnet)
+		bonnet.add_child(Util.box(Vector3(L * 0.3, 0.06, W * 0.92), col.darkened(0.15), Vector3(-L * 0.15, 0, 0), true))
+		var bt := create_tween()
+		bt.tween_property(bonnet, "rotation:z", 0.9, 0.2).set_trans(Tween.TRANS_BACK)
+	# A wheel pops off and rolls away down the road
+	var wr: float = dims.wheel_r
+	var wheel := Util.cylinder(wr, 0.28, Color(0.1, 0.1, 0.1), Vector3.ZERO, true)
+	wheel.add_child(Util.cylinder(wr * 0.45, 0.3, Color(0.8, 0.8, 0.85)))
+	var holder := Node3D.new()
+	main.add_child(holder)
+	holder.global_position = global_position + global_transform.basis.x * (L * 0.32) + global_transform.basis.z * (W / 2.0) + Vector3(0, wr, 0)
+	holder.rotation.y = yaw
+	holder.add_child(wheel)
+	wheel.rotation_degrees.x = 90.0
+	var roll := global_transform.basis.z * rng.randf_range(4.0, 7.0) + global_transform.basis.x * rng.randf_range(-2.0, 2.0)
+	var wt := holder.create_tween()
+	wt.tween_property(holder, "global_position", holder.global_position + roll, 1.4).set_ease(Tween.EASE_OUT)
+	wt.parallel().tween_property(wheel, "rotation:y", 14.0, 1.4).set_ease(Tween.EASE_OUT)
+	wt.tween_property(holder, "rotation:z", 1.4, 0.35).set_trans(Tween.TRANS_BOUNCE)
+	wt.tween_interval(6.0)
+	wt.tween_property(holder, "scale", Vector3.ONE * 0.01, 0.4)
+	wt.tween_callback(holder.queue_free)
+	# Smoke puffing out of the engine
+	var smoke := Node3D.new()
+	smoke.position = Vector3(L * 0.35, dims.bonnet + 0.2, 0)
+	body_mesh.add_child(smoke)
+	for i in 3:
+		var puff := Util.sphere(0.35, Color(0.35, 0.35, 0.38))
+		puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		puff.scale = Vector3.ONE * 0.01
+		smoke.add_child(puff)
+		var st := puff.create_tween().set_loops()
+		st.tween_interval(i * 0.4)
+		st.tween_property(puff, "scale", Vector3.ONE * 1.3, 1.2)
+		st.parallel().tween_property(puff, "position", Vector3(-0.4, 2.2, 0), 1.2)
+		st.tween_property(puff, "scale", Vector3.ONE * 0.01, 0.01)
+		st.tween_property(puff, "position", Vector3.ZERO, 0.01)
+	# Limps along if it was driving
+	drive_speed *= 0.5
+	_debris(rng, Color(0.15, 0.13, 0.12), 10)
+	pass_speed *= 0.5
+
+
+## A cartoon fireball: an orange ball and a yellow core that swell and pop, with a ring of smoke.
+func _explosion(rng: RandomNumberGenerator) -> void:
+	var at := global_position + Vector3(0, 1.2, 0)
+	for k in 3:
+		var col: Color = [Color(1, 0.45, 0.05), Color(1, 0.85, 0.2), Color(1, 1, 0.85)][k]
+		var ball := Util.sphere(1.0, Util.glow(col, 4.0 - k), at)
+		ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ball.scale = Vector3.ONE * 0.2
+		main.add_child(ball)
+		var size := 4.2 - k * 1.1
+		var bt := ball.create_tween()
+		bt.tween_property(ball, "scale", Vector3.ONE * size, 0.22).set_ease(Tween.EASE_OUT)
+		bt.tween_interval(0.08 * k)
+		bt.tween_property(ball, "scale", Vector3.ONE * 0.01, 0.3).set_ease(Tween.EASE_IN)
+		bt.tween_callback(ball.queue_free)
+	for i in 8:
+		var a := TAU * i / 8.0
+		var puff := Util.sphere(0.7, Color(0.3, 0.28, 0.28), at)
+		puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		puff.scale = Vector3.ONE * 0.3
+		main.add_child(puff)
+		var pt := puff.create_tween()
+		pt.tween_property(puff, "position", at + Vector3(cos(a), 0.4, sin(a)) * rng.randf_range(3.0, 4.5), 0.6).set_ease(Tween.EASE_OUT)
+		pt.parallel().tween_property(puff, "scale", Vector3.ONE * 1.6, 0.6)
+		pt.tween_property(puff, "scale", Vector3.ONE * 0.01, 0.8)
+		pt.tween_callback(puff.queue_free)
+	var light := OmniLight3D.new()
+	light.light_color = Color(1, 0.6, 0.2)
+	light.light_energy = 6.0
+	light.omni_range = 14.0
+	light.position = at
+	main.add_child(light)
+	var lt := light.create_tween()
+	lt.tween_property(light, "light_energy", 0.0, 0.6)
+	lt.tween_callback(light.queue_free)
+
+
+## Burnt to a crisp: every part of the car goes sooty black.
+func _char(n: Node) -> void:
+	for c in n.get_children():
+		if c is MeshInstance3D:
+			c.material_override = Util.mat(Color(0.13, 0.11, 0.1), true)
+		elif c is Label3D:
+			continue
+		_char(c)
 
 
 func give_ticket() -> void:
@@ -825,7 +1049,7 @@ func is_illegal() -> bool:
 	if not boss.is_empty() or kind in ["wedding", "sleigh", "hearse"]:
 		return true
 	match spot.type:
-		"yellow", "busstop":
+		"yellow", "busstop", "zigzag":
 			return true
 		"disabled":
 			return not blue_badge
@@ -843,6 +1067,8 @@ func offence_name() -> String:
 		return "HAUNTED HEARSE +BONUS"
 	if spot.type == "busstop":
 		return "PARKED AT A BUS STOP"
+	if spot.type == "zigzag":
+		return "SCHOOL ZIG-ZAGS"
 	if spot.type == "disabled":
 		return "NO BLUE BADGE"
 	return "DOUBLE YELLOWS" if spot.type == "yellow" else "METER EXPIRED"

@@ -16,6 +16,8 @@ const HudScript := preload("res://scripts/hud.gd")
 const PauseScript := preload("res://scripts/pause_handler.gd")
 const TouchScript := preload("res://scripts/touch_controls.gd")
 const WeatherScript := preload("res://scripts/weather.gd")
+const SchoolScript := preload("res://scripts/school.gd")
+const RampageFxScript := preload("res://scripts/rampage_fx.gd")
 
 # Scoring rules (from the design doc)
 const BASE_POINTS := 100
@@ -39,6 +41,16 @@ const CAMERA_VAN_RANGE := 11.0
 const TOW_RANGE := 7.0
 const COLLECTIBLES_PER_LEVEL := 3
 const WAVE_TIME := 60.0
+
+# Rampage mode: floor three drivers in a row (each within STREAK_WINDOW of the last) to get the bat
+const RAMPAGE_STREAK := 3
+const STREAK_WINDOW := 15.0
+const RAMPAGE_TIME := 15.0
+const BAT_BONUS := 40
+const SMASH_BONUS := 25
+const WRECK_BONUS := 100
+const ZIGZAG_BONUS := 50
+const MAX_FOOTPRINTS := 220
 
 # Ticket mini-game
 const TICKET_RANGE := 3.2
@@ -85,6 +97,12 @@ class Player extends RefCounted:
 	var sweets := 0  # Halloween: one sweet per trick-or-treater gets you a treat
 	var punch_state := 0  # 0 nobody to punch, 1 a driver in reach, 2 perfect timing (the touch button glows too)
 	var punch_rings: Array = []  # [in reach, perfect] rings drawn under the driver a punch would hit
+	var punch_streak := 0  # drivers floored in a row, for rampage mode
+	var streak_timer := 0.0
+	var rampage_left := 0.0
+	var bloody := 0  # red footprints left to print after walking through a puddle
+	var last_step := Vector3.ZERO
+	var foot := 1.0
 
 
 var rng := RandomNumberGenerator.new()
@@ -155,6 +173,11 @@ var sleigh_timer := 18.0
 var flyover: Node3D = null
 var fly_dir := Vector3.RIGHT
 var fly_drop := 0.0
+
+# Rampage mode
+var rampage_fx = null
+var puddles: Array = []  # [centre, radius] left by drivers knocked out cold
+var footprints: Array = []
 
 # Endless mode
 var wave := 1
@@ -268,6 +291,8 @@ func _ready() -> void:
 	for i in ped_target:
 		_spawn_pedestrian()
 	wildlife = preload("res://scripts/wildlife.gd").spawn(self)
+	if level.has("school"):
+		SchoolScript.spawn(self)
 	preload("res://scripts/dogwalker.gd").spawn_some(self, 1 if training or level.theme in ["carpark", "multistorey", "city"] else 3)
 	street_timer = rng.randf_range(QUIET_START + 15.0, QUIET_START + 35.0)
 	pickup_timer = rng.randf_range(QUIET_START, QUIET_START + 15.0)
@@ -409,9 +434,10 @@ func _sum(key: String) -> int:
 
 # ---------------------------------------------------------------- spawning
 
-func _spawn_car(spot: Dictionary, already_parked: bool, kind := "", boss_def := {}) -> void:
+func _spawn_car(spot: Dictionary, already_parked: bool, kind := "", boss_def := {}, school_run := false) -> void:
 	var car = CarScript.new()
 	car.main = self
+	car.school_run = school_run
 	car.spot = spot
 	car.lane = spot.lane
 	car.start_parked = already_parked
@@ -474,8 +500,18 @@ func _try_spawn() -> void:
 	if _parked_count() >= max_cars:
 		return
 	var spot = _open_spot()
-	if spot != null:
-		_spawn_car(spot, false)
+	if spot == null:
+		return
+	var school_run := level.has("school_run") and rng.randf() < float(level.school_run)
+	if school_run and rng.randf() < 0.5:
+		# Parents love the zig-zags right outside the gate
+		var zig := spots.filter(func(sp: Dictionary) -> bool: return sp.type == "zigzag" and sp.car == null)
+		if not zig.is_empty():
+			spot = zig[rng.randi() % zig.size()]
+			for c in get_tree().get_nodes_in_group("cars"):
+				if c.lane == spot.lane and c.is_moving() and c.s < 9.0:
+					return
+	_spawn_car(spot, false, "", {}, school_run)
 
 
 func _spawn_driver(car, target) -> void:
@@ -548,9 +584,11 @@ func _process(delta: float) -> void:
 			Audio.sfx("beep")
 		if intro_left <= 0.0:
 			state = "playing"
-			Audio.sfx("whistle_long")
+			Audio.sfx("whistle_long", 1.0, 0.4)
 			Audio.voice("announce_go")
 			hud.banner("GO!", 0.6, true)
+			if level.has("school"):
+				Audio.sfx("school_bell", 1.0, 0.7)
 		return
 	if state == "results":
 		return
@@ -573,6 +611,7 @@ func _process(delta: float) -> void:
 			p.combo_timer -= delta
 			if p.combo_timer <= 0.0:
 				p.combo_index = 0
+		_update_rampage(p, delta)
 	spawn_timer -= delta
 	if spawn_timer <= 0.0:
 		spawn_timer = rng.randf_range(spawn_every.x, spawn_every.y)
@@ -897,13 +936,18 @@ func _score_ticket(p: Player, car, base: int, word: String, combo := true, damag
 	var mult: float = COMBO_STEPS[p.combo_index] if combo else 1.0
 	p.best_combo = maxf(p.best_combo, mult)
 	var bonus := 0
+	var bonus_name := ""
 	if level.has("special_car") and car.kind == level.special_car.kind:
 		bonus = int(level.special_car.bonus)
+		bonus_name = car.kind.to_upper()
+	elif car.spot != null and car.spot.type == "zigzag":
+		bonus = ZIGZAG_BONUS
+		bonus_name = "ZIG-ZAG"
 	var points := int(round((base + bonus) * mult))
 	p.score += points
 	_popup("%s  +%d" % [word, points], Color(1, 0.9, 0.2), pos, 44)
 	if bonus > 0:
-		_popup("%s BONUS!" % car.kind.to_upper(), Color(1, 0.5, 0.9), pos + Vector3(0, 1.2, 0), 30)
+		_popup("%s BONUS!" % bonus_name, Color(1, 0.5, 0.9), pos + Vector3(0, 1.2, 0), 30)
 	if combo and p.combo_index > 0:
 		_popup("COMBO x%s" % str(mult), Color(1, 0.6, 0.15), pos + Vector3(0, -1.2, 0), 30)
 		Audio.sfx("combo", 1.0 + p.combo_index * 0.1)
@@ -1221,7 +1265,7 @@ func _start_boss() -> void:
 	hud.banner("BOSS INCOMING!\n%s" % b.intro, 3.0)
 	Audio.voice("announce_boss")
 	Audio.sting("boss")
-	Audio.play_music("boss")
+	_play_level_music()
 	_place_boss_car()
 
 
@@ -1268,7 +1312,8 @@ func _hit_boss(p: Player, car, damage: int) -> void:
 	_popup("BOSS BEATEN!  +%d" % bonus, Color(1, 0.4, 0.9), car.global_position + Vector3(0, 3.6, 0), 52)
 	hud.banner("%s\nBEATEN!  +%d" % [boss.name, bonus], 2.0)
 	Audio.sting("win")
-	Audio.play_music(_music())
+	boss = {}
+	_play_level_music()
 	_shake_all(0.5)
 	if not car.towed:
 		car.leave_after(2.5)
@@ -1283,14 +1328,30 @@ func on_car_gone(car) -> void:
 		boss_escapes += 1
 		if boss.id == "getaway" and boss_escapes >= 4:
 			hud.banner("THE GETAWAY CAR GOT AWAY!", 2.0)
-			Audio.play_music(_music())
 			boss = {}
+			_play_level_music()
 			last_big = elapsed
 			boss_car = null
 			return
 		boss.hp_left = car.boss.hp
 		boss_car = null
 		boss_respawn = 2.5
+
+
+## School Patrol: a parent pulls up, the kids hop out and run in. Parents near the warden have
+## something to say about it: a dig if they're on the zig-zags, a thank-you if they parked properly.
+func on_school_drop(car) -> void:
+	SchoolScript.drop_kids(self, car)
+	var w = nearest_warden(car.global_position)
+	if w == null or w.global_position.distance_to(car.global_position) > 16.0 or rng.randf() < 0.45:
+		return
+	var female := rng.randf() < 0.5
+	if car.is_illegal():
+		car.shout("HAVEN'T YOU GOT ANYTHING BETTER TO DO?!")
+		Audio.voice("driver_betterdo", rng.randf_range(0.96, 1.05), 1.0, false, int(female))
+	else:
+		car.shout("GLAD YOU'RE HERE, THEY BEHAVE WHEN YOU ARE!")
+		Audio.voice("driver_behave", rng.randf_range(0.96, 1.05), 1.0, false, int(female))
 
 
 func on_bus_blocked(car) -> void:
@@ -1615,6 +1676,9 @@ func warden_punch(w) -> void:
 	var p := player_of(w)
 	if p.writing:
 		_cancel_write(p, "")
+	if p.rampage_left > 0.0:
+		_bat_swing(p, w)
+		return
 	var wp: Dictionary = w.weapon
 	var origin: Vector3 = w.punch_origin()
 	var hit := false
@@ -1629,6 +1693,7 @@ func warden_punch(w) -> void:
 		hit = true
 		if floored:
 			p.punches += 1
+			_count_streak(p)
 		_shake(p, 0.55 if perfect else 0.4)
 		var pos: Vector3 = d.global_position + Vector3(0, 2.4, 0)
 		_popup(words[rng.randi() % words.size()], Color(1, 0.95, 0.3), pos, 64 if perfect else 56)
@@ -1686,6 +1751,210 @@ func _hit_stop() -> void:
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+
+
+# ---------------------------------------------------------------- rampage mode
+
+func _rampage_on() -> bool:
+	for p in players:
+		if p.rampage_left > 0.0:
+			return true
+	return false
+
+
+## The level's music, or the boss theme while a boss is about. Rampage keeps its own track.
+func _play_level_music() -> void:
+	if _rampage_on():
+		return
+	Audio.play_music("boss" if not boss.is_empty() else _music())
+
+
+func _count_streak(p: Player) -> void:
+	if p.rampage_left > 0.0:
+		return
+	p.punch_streak += 1
+	p.streak_timer = STREAK_WINDOW
+	var pos: Vector3 = p.warden.global_position + Vector3(0, 3.6, 0)
+	if p.punch_streak >= RAMPAGE_STREAK:
+		_start_rampage(p)
+	elif p.punch_streak > 1:
+		_popup("%d IN A ROW!  %d MORE FOR RAMPAGE" % [p.punch_streak, RAMPAGE_STREAK - p.punch_streak], Color(1, 0.3, 0.2), pos, 30)
+
+
+func _start_rampage(p: Player) -> void:
+	var first := not _rampage_on()
+	p.punch_streak = 0
+	p.rampage_left = RAMPAGE_TIME
+	var w = p.warden
+	w.set_rampage(true)
+	w.boost(1.2, RAMPAGE_TIME, true)
+	if rampage_fx == null:
+		rampage_fx = RampageFxScript.new()
+		rampage_fx.main = self
+		add_child(rampage_fx)
+	rampage_fx.set_active(true)
+	_popup("RAMPAGE!", Color(1, 0.15, 0.1), w.global_position + Vector3(0, 3.4, 0), 72)
+	Audio.voice("announce_rampage")
+	Audio.sfx("smash", 0.8, 0.7)
+	if first:
+		Audio.play_music("rampage", 0.25, true)
+	_shake(p, 0.8)
+	_hit_stop()
+
+
+func _end_rampage(p: Player) -> void:
+	p.rampage_left = 0.0
+	p.warden.set_rampage(false)
+	_popup("RAMPAGE OVER", Color(1, 0.6, 0.5), p.warden.global_position + Vector3(0, 3.4, 0), 36)
+	if _rampage_on():
+		return
+	if rampage_fx != null:
+		rampage_fx.set_active(false)
+	_play_level_music()
+	# The knocked-out drivers come round a bit later and stagger back to their cars
+	for d in get_tree().get_nodes_in_group("drivers"):
+		d.wake_up(rng.randf_range(6.0, 12.0))
+
+
+func _update_rampage(p: Player, delta: float) -> void:
+	if p.streak_timer > 0.0:
+		p.streak_timer -= delta
+		if p.streak_timer <= 0.0:
+			p.punch_streak = 0
+	if p.rampage_left > 0.0:
+		p.rampage_left -= delta
+		if rampage_fx != null:
+			var most := 0.0
+			for q in players:
+				most = maxf(most, q.rampage_left)
+			rampage_fx.left_frac = most / RAMPAGE_TIME
+		if p.rampage_left <= 0.0:
+			_end_rampage(p)
+	_update_footprints(p)
+
+
+## One swing of the rampage bat: knocks the nearest driver out cold, otherwise smashes the nearest car.
+func _bat_swing(p: Player, w) -> void:
+	var wp: Dictionary = w.weapon
+	var words: Array = wp.words
+	var d = punch_target(w)
+	if d != null:
+		w.lunge(d.global_position, maxf(_flat_dist(w.global_position, d.global_position) - 1.3, 0.0))
+		var floored: bool = d.punched(w.global_position, float(wp.knock), true)
+		var pos: Vector3 = d.global_position + Vector3(0, 2.4, 0)
+		_popup(words[rng.randi() % words.size()], Color(1, 0.95, 0.3), pos, 64)
+		if floored:
+			p.punches += 1
+			p.score += BAT_BONUS
+			_popup("KNOCKOUT!  +%d" % BAT_BONUS, Color(1, 0.35, 0.25), pos + Vector3(0, 1.0, 0), 32)
+		_shake(p, 0.6)
+		Audio.sfx("bat_hit", rng.randf_range(0.9, 1.1))
+		if rng.randf() < 0.35:
+			Audio.voice("warden_homerun" if rng.randf() < 0.5 else "warden_batter")
+		return
+	var car = _smash_target(w)
+	if car != null:
+		var reach: float = _flat_dist(w.global_position, car.global_position) - car.car_length * 0.35 - 1.2
+		w.lunge(car.global_position, clampf(reach, 0.0, 2.5))
+		var wrecked: bool = car.smash(w.global_position)
+		var pos: Vector3 = car.global_position + Vector3(0, 2.6, 0)
+		var pts := WRECK_BONUS if wrecked else SMASH_BONUS
+		p.score += pts
+		if wrecked:
+			_popup("KABOOM!", Color(1, 0.55, 0.1), pos + Vector3(0, 1.4, 0), 84)
+			_popup("WRECKED!  +%d" % pts, Color(1, 0.4, 0.15), pos, 50)
+			_shake_all(1.0)
+			# The blast knocks any drivers nearby out cold too
+			for other in get_tree().get_nodes_in_group("drivers"):
+				if other.can_be_punched() and _flat_dist(other.global_position, car.global_position) < 6.0:
+					if other.punched(car.global_position, 24.0, true):
+						p.punches += 1
+						p.score += BAT_BONUS
+		else:
+			_popup("%s  +%d" % [["SMASH!", "CRUNCH!", "KER-RUNCH!", "DENT!"][rng.randi() % 4], pts], Color(1, 0.8, 0.3), pos, 50)
+			_shake(p, 0.5)
+		Audio.sfx("smash", rng.randf_range(0.9, 1.1))
+		Audio.sfx("bat_hit", rng.randf_range(0.7, 0.85), 0.6)
+		return
+	Audio.sfx("bat_swing", rng.randf_range(0.9, 1.1))
+
+
+## The nearest car the bat can reach (bosses and tow-truck jobs are left alone).
+func _smash_target(w):
+	var best = null
+	var best_d := INF
+	for c in get_tree().get_nodes_in_group("cars"):
+		if c.towed or not c.boss.is_empty() or c.wrecked and c.smash_hits >= 6:
+			continue
+		var dist: float = _flat_dist(w.global_position, c.global_position) - c.car_length * 0.35
+		if dist < float(w.weapon.range) + PUNCH_ASSIST and dist < best_d:
+			best_d = dist
+			best = c
+	return best
+
+
+## A knocked-out driver hits the floor: a red puddle spreads out under them.
+func on_driver_down(d) -> void:
+	var at: Vector3 = d.global_position
+	at.y = world.height_at(at) + 0.09
+	var r := rng.randf_range(0.9, 1.4)
+	var red := Color(0.6, 0.0, 0.03)
+	var puddle := Node3D.new()
+	puddle.position = at
+	add_child(puddle)
+	var main_blob := Util.cylinder(r, 0.02, red)
+	main_blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	puddle.add_child(main_blob)
+	for i in 4:
+		var a := rng.randf() * TAU
+		var blob := Util.cylinder(r * rng.randf_range(0.25, 0.45), 0.02, red, Vector3(cos(a), 0.004, sin(a)) * r * 0.85)
+		blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		puddle.add_child(blob)
+	var shine := Util.cylinder(r * 0.25, 0.022, Color(0.9, 0.3, 0.3), Vector3(-r * 0.3, 0.004, -r * 0.3))
+	shine.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	puddle.add_child(shine)
+	puddle.scale = Vector3(0.1, 1, 0.1)
+	var tw := puddle.create_tween()
+	tw.tween_property(puddle, "scale", Vector3.ONE, 1.6).set_ease(Tween.EASE_OUT)
+	puddles.append([at, r])
+	Audio.sfx("splash", 0.6, 0.5)
+
+
+## Walking through a puddle leaves a trail of red footprints for the next dozen or so steps.
+func _update_footprints(p: Player) -> void:
+	if puddles.is_empty():
+		return
+	var w = p.warden
+	var here: Vector3 = w.global_position
+	for pd in puddles:
+		if _flat_dist(here, pd[0]) < float(pd[1]):
+			p.bloody = 14
+	if p.bloody <= 0 or _flat_dist(here, p.last_step) < 0.75:
+		return
+	p.last_step = here
+	p.foot = -p.foot
+	var fwd: Vector3 = w.facing
+	var side := Vector3(-fwd.z, 0, fwd.x) * 0.2 * p.foot
+	var pos := here + side
+	pos.y = world.height_at(pos) + 0.1
+	var k := float(p.bloody) / 14.0
+	var fp := Node3D.new()
+	fp.position = pos
+	fp.rotation.y = atan2(fwd.x, fwd.z)
+	add_child(fp)
+	var red := Color(0.55, 0.0, 0.03).lerp(Color(0.62, 0.3, 0.3), 1.0 - k)
+	var sole := Util.box(Vector3(0.2, 0.012, 0.26), red, Vector3(0, 0, 0.04))
+	var heel := Util.box(Vector3(0.17, 0.012, 0.13), red, Vector3(0, 0, -0.2))
+	for m in [sole, heel]:
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fp.add_child(m)
+	fp.scale = Vector3.ONE * (0.75 + 0.25 * k)
+	footprints.append(fp)
+	if footprints.size() > MAX_FOOTPRINTS:
+		var old = footprints.pop_front()
+		if is_instance_valid(old):
+			old.queue_free()
+	p.bloody -= 1
 
 
 func on_heckled(_source, _w) -> void:
@@ -1820,7 +2089,7 @@ func on_lightning(pos: Vector3) -> void:
 
 func blow_whistle(w) -> void:
 	_popup("PHWEEEET!" if Game.upgrade_level("megaphone") == 0 else "OI! YOU!", Color.WHITE, w.global_position + Vector3(0, 2.8, 0), 34)
-	Audio.sfx("whistle", rng.randf_range(0.95, 1.05))
+	Audio.sfx("whistle", rng.randf_range(0.95, 1.05), 0.4)
 	for d in get_tree().get_nodes_in_group("drivers"):
 		if d.global_position.distance_to(w.global_position) < w.whistle_range:
 			d.startle(w.whistle_freeze)
@@ -1831,6 +2100,8 @@ func blow_whistle(w) -> void:
 		street_event.whistled(w)
 	if wildlife != null:
 		wildlife.whistled(w.global_position, w.whistle_range)
+	for l in get_tree().get_nodes_in_group("road_blockers"):
+		l.whistled(w)
 
 
 func _popup(text: String, color: Color, world_pos: Vector3, size := 36) -> void:
@@ -1878,7 +2149,7 @@ func _end_shift() -> void:
 			_cancel_write(p, "")
 	for d in get_tree().get_nodes_in_group("drivers"):
 		d.queue_free()
-	Audio.sfx("whistle_long")
+	Audio.sfx("whistle_long", 1.0, 0.4)
 	Audio.voice("announce_shift_over")
 	if training:
 		# No scores or records for the tutorial: back to the menu, ready for Pleasant Street

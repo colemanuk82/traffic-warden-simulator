@@ -571,7 +571,7 @@ func _pick_levels(mode: String) -> void:
 
 func _start(mode: String, level := -1, event := "", training := false) -> void:
 	Audio.sfx("ui_select")
-	Audio.sfx("whistle")
+	Audio.sfx("whistle", 1.0, 0.4)
 	Game.training = training
 	Game.mode = mode
 	Game.current_event = event
@@ -586,31 +586,33 @@ func _build_levels() -> Control:
 	root.set_meta("header", root.get_child(0))
 	var grid := GridContainer.new()
 	grid.columns = 4
-	grid.position = Vector2(40, 104)
+	grid.position = Vector2(40, 100 if Levels.count() > 12 else 104)
 	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10 if Levels.count() <= 12 else 6)
 	root.add_child(grid)
+	# Four rows once there are more than twelve levels, so the cards get more compact to fit
+	var compact := Levels.count() > 12
 	for i in Levels.count():
 		var lv := Levels.get_level(i)
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(289, 140)
+		b.custom_minimum_size = Vector2(289, 104 if compact else 140)
 		b.set_meta("level", i)
 		grid.add_child(b)
 		var map := Control.new()
 		map.position = Vector2(8, 8)
-		map.size = Vector2(72, 72)
+		map.size = Vector2(52, 52) if compact else Vector2(72, 72)
 		map.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map.draw.connect(_draw_level_map.bind(map, lv))
 		b.add_child(map)
 		var name := _title_label(lv.name, 23)
-		name.position = Vector2(88, 6)
-		name.size = Vector2(194, 74)
+		name.position = Vector2(68, 4) if compact else Vector2(88, 6)
+		name.size = Vector2(214, 58) if compact else Vector2(194, 74)
 		name.autowrap_mode = TextServer.AUTOWRAP_WORD
 		name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		name.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(name)
 		var stars := Control.new()
-		stars.position = Vector2(8, 82)
+		stars.position = Vector2(8, 56) if compact else Vector2(8, 82)
 		stars.size = Vector2(274, 30)
 		stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stars.draw.connect(func() -> void:
@@ -626,8 +628,8 @@ func _build_levels() -> Control:
 			stars.draw_string(Game.font_body, Vector2(132, 22), "%d/3" % found, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 0.8, 0.2) if found == 3 else INK))
 		b.add_child(stars)
 		var lock := Label.new()
-		lock.position = Vector2(8, 110)
-		lock.size = Vector2(274, 26)
+		lock.position = Vector2(8, 80) if compact else Vector2(8, 110)
+		lock.size = Vector2(274, 22) if compact else Vector2(274, 26)
 		lock.add_theme_font_size_override("font_size", 16)
 		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock.set_meta("is_lock", true)
@@ -842,6 +844,7 @@ func _build_unlocks() -> Control:
 	scroll.size = Vector2(760, 530)
 	scroll.follow_focus = true
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 14  # a finger drag scrolls the list, a tap still presses
 	root.add_child(scroll)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
@@ -910,6 +913,7 @@ func _unlock_row(v: VBoxContainer, kind: String, name: String, open: bool, req: 
 		b.text = "LOCKED   %s: %s  -  %s%s" % [kind, name, req, ("  (%s)" % prog) if prog != "" else ""]
 		b.modulate = Color(0.75, 0.75, 0.8)
 	b.focus_entered.connect(func() -> void: Audio.sfx("ui_move", 1.0, 0.4))
+	b.mouse_filter = Control.MOUSE_FILTER_PASS  # let touch drags reach the scroll list
 	v.add_child(b)
 
 
@@ -1108,6 +1112,7 @@ func _challenge_row(v: VBoxContainer, text: String, done: bool, prog: String) ->
 	if done:
 		b.modulate = Color(0.6, 1.0, 0.6)
 	b.focus_entered.connect(func() -> void: Audio.sfx("ui_move", 1.0, 0.4))
+	b.mouse_filter = Control.MOUSE_FILTER_PASS  # let touch drags reach the scroll list
 	v.add_child(b)
 	return b
 
@@ -1182,6 +1187,7 @@ func _build_depot() -> Control:
 	scroll.size = Vector2(800, 530)
 	scroll.follow_focus = true
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 14  # a finger drag scrolls the list, a tap still presses
 	root.add_child(scroll)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 5)
@@ -1298,7 +1304,12 @@ func _depot_row(v: VBoxContainer, text: String, desc: String, cb: Callable, affo
 	b.focus_entered.connect(func() -> void:
 		Audio.sfx("ui_move", 1.0, 0.4)
 		depot_info.text = desc)
-	b.mouse_entered.connect(func() -> void: b.grab_focus())
+	# Hovering picks a row with the mouse; on a touch screen it would yank the list about mid-drag
+	b.mouse_entered.connect(func() -> void:
+		if not Game.using_touch:
+			b.grab_focus())
+	# PASS lets a finger drag reach the scroll list (it cancels the press once the list starts moving)
+	b.mouse_filter = Control.MOUSE_FILTER_PASS
 	v.add_child(b)
 	depot_rows.append(b)
 	return b
@@ -1521,7 +1532,7 @@ func _leave_title() -> void:
 	if screen != "title":
 		return
 	Game.title_seen = true
-	Audio.sfx("whistle")
+	Audio.sfx("whistle", 1.0, 0.4)
 	if Game.profile_name == "":
 		_ask_profile(1, "training")
 	else:

@@ -103,6 +103,8 @@ var female := false
 var visual: Node3D
 var shout_label: Label3D
 var stars_label: Label3D
+var out_cold := false  # batted in rampage mode: stays flat on the floor until the rampage is over
+var landed := false
 
 
 func _ready() -> void:
@@ -260,6 +262,9 @@ func _update_knocked(delta: float) -> void:
 		if knock_y <= 0.0 and knock_vy < 0.0:
 			knock_vy = 0.0
 			Audio.sfx("thud", randf_range(0.9, 1.1), 0.8)
+			if out_cold and not landed:
+				landed = true
+				main.on_driver_down(self)
 	knock_vel = knock_vel.move_toward(Vector3.ZERO, 14.0 * delta)
 	velocity = knock_vel
 	var before := global_position
@@ -267,6 +272,8 @@ func _update_knocked(delta: float) -> void:
 	global_position = main.world.clamp_move(before, Vector3(global_position.x, main.world.height_at(global_position), global_position.z))
 	visual.position.y = knock_y
 	stars_label.rotation.y += delta * 5.0
+	if out_cold:
+		return
 	if knock_left <= 0.0:
 		visual.rotation.x = 0.0
 		visual.position.y = 0.0
@@ -275,11 +282,23 @@ func _update_knocked(delta: float) -> void:
 		shout("I'm telling my mum!")
 
 
-## Returns true if that punch floored them.
-func punched(from: Vector3, knock := 14.0) -> bool:
+## Comes round after being knocked out cold in rampage mode, then limps back to the car.
+func wake_up(after: float) -> void:
+	if not out_cold:
+		return
+	out_cold = false
+	knock_left = after
+	stars_label.text = "@ * @"
+	stars_label.modulate = Color.WHITE
+
+
+## Returns true if that punch floored them. A bat in rampage mode knocks them out cold.
+func punched(from: Vector3, knock := 14.0, cold := false) -> bool:
 	var away := global_position - from
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.01 else Vector3(0, 0, 1)
+	if cold:
+		hp = mini(hp, 1)
 	hp -= 1
 	if hp > 0:
 		# Shrugs it off, staggers back and gets angrier
@@ -294,12 +313,20 @@ func punched(from: Vector3, knock := 14.0) -> bool:
 		return false
 	state = "knocked"
 	knock_left = KNOCK_TIME
+	if cold:
+		hp = 0
+		out_cold = true
+		landed = false
+		stars_label.text = "X  X"
+		stars_label.modulate = Color(1, 0.5, 0.4)
+		shout(["OUT COLD!", "GOODNIGHT!", "ZZZ...", "K.O.!"][randi() % 4])
 	knock_vel = away * knock
 	knock_vy = 9.0 * knock / 14.0
 	knock_y = 0.01
 	startle_left = 0.0
 	stars_label.visible = true
-	shout(["OW!", "MY NOSE!", "OOOF!", "NOT THE FACE!"][randi() % 4])
+	if not cold:
+		shout(["OW!", "MY NOSE!", "OOOF!", "NOT THE FACE!"][randi() % 4])
 	Audio.voice("punched", pitch, 1.0, true, int(female))
 	return true
 

@@ -400,6 +400,9 @@ func _build_spots() -> void:
 				for j in pave_rects.size():
 					if j != i and pave_rects[j].grow(2.5).has_point(c2):
 						junction = true
+				for ns in def.get("no_spots", []):
+					if (ns as Rect2).has_point(c2):
+						junction = true
 				if junction:
 					continue
 				var lane = lanes[seg.road * 2 + (0 if side > 0.0 else 1)]
@@ -407,15 +410,18 @@ func _build_spots() -> void:
 				var travel: Vector3 = d * side
 				var spot := {
 					"pos": centre, "normal": n, "dir": travel, "lane": lane, "s": lane.project(lane_point),
-					"type": _spot_type(), "car": null, "label": null,
+					"type": _spot_type(c2), "car": null, "label": null,
 				}
 				_mark_spot(spot)
 				spots.append(spot)
 			t += SPOT_SPACING
 
 
-func _spot_type() -> String:
-	## Meter bays, double yellows, disabled bays (blue badge holders only) and the odd bus stop
+func _spot_type(at := Vector2.ZERO) -> String:
+	## Meter bays, double yellows, disabled bays (blue badge holders only) and the odd bus stop.
+	## Outside a school (School Patrol) the kerb is yellow zig-zags: no stopping at all.
+	if def.has("school") and (def.school.zigzag as Rect2).has_point(at):
+		return "zigzag"
 	var r := rng.randf()
 	if r < 0.07 and bus_stops < 2 + segments.size():
 		bus_stops += 1
@@ -449,6 +455,29 @@ func _mark_spot(spot: Dictionary) -> void:
 		sign.rotation.y = yaw + PI / 2
 		add_child(sign)
 		add_child(Util.label3d("BLUE BADGE\nONLY", 26, Color.WHITE, sp + Vector3(0, 2.75, 0)))
+		return
+	if spot.type == "zigzag":
+		# Yellow zig-zags along the kerb, with SCHOOL KEEP CLEAR painted in the bay
+		var zy := Color(1, 0.85, 0.1)
+		var pts: Array[Vector3] = []
+		var k := 0
+		var tz := -3.6
+		while tz <= 3.61:
+			pts.append(c + d * tz + n * (0.75 + (0.32 if k % 2 == 0 else -0.32)))
+			tz += 0.6
+			k += 1
+		for i in pts.size() - 1:
+			var a: Vector3 = pts[i]
+			var b: Vector3 = pts[i + 1]
+			var seg := Util.box(Vector3(a.distance_to(b) + 0.08, 0.02, 0.13), zy, (a + b) / 2.0 + Vector3(0, 0.075, 0))
+			seg.rotation.y = yaw_of(b - a)
+			add_child(seg)
+		var keep := Util.label3d("SCHOOL KEEP CLEAR", 44, zy, c - n * 0.2 + Vector3(0, 0.1, 0))
+		keep.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		keep.rotation = Vector3(-PI / 2, yaw, 0)
+		keep.outline_size = 0
+		keep.no_depth_test = false
+		add_child(keep)
 		return
 	if spot.type == "busstop":
 		var yellow := Color(1, 0.85, 0.1)
@@ -727,6 +756,8 @@ func _windows(node: Node3D, color, rows: int, spacing := 2.2, start := 1.6) -> v
 
 
 func _build_theme() -> void:
+	if def.has("school"):
+		_build_school(def.school)
 	match def.theme:
 		"suburb":
 			_line_buildings(Vector2(6, 10), Vector2(4.5, 8), 6.0, 2.0, _suburb_house)
@@ -771,6 +802,82 @@ func _build_theme() -> void:
 			Scenery.build_theme(self)
 	_street_furniture()
 	Scenery.dress(self)
+
+
+## School Patrol: the primary school behind its railings, a playground, the zebra crossings where the
+## lollipop ladies work, and SCHOOL warning signs.
+func _build_school(sc: Dictionary) -> void:
+	var site: Rect2 = sc.site
+	footprints.append(site)
+	var gate: Vector2 = sc.gate
+	# Playground tarmac with hopscotch and a painted circle
+	var yard := Rect2(site.position.x, site.end.y - sc.yard, site.size.x, sc.yard)
+	add_child(Util.box(Vector3(yard.size.x, 0.1, yard.size.y), Color(0.36, 0.36, 0.4), _v3(yard.get_center(), 0.02)))
+	var paint := Color(0.98, 0.9, 0.3)
+	for i in 6:
+		add_child(Util.box(Vector3(0.9, 0.02, 0.9), paint if i % 2 == 0 else Color(0.95, 0.95, 0.95), _v3(Vector2(yard.position.x + 5 + i * 1.0, yard.get_center().y), 0.08)))
+	var ring := Util.torus(2.2, 2.4, Util.mat(Color(0.95, 0.95, 0.95)), _v3(yard.get_center() + Vector2(8, 0), 0.08))
+	add_child(ring)
+	# Climbing frame and a bench
+	var cf := _v3(Vector2(yard.end.x - 6, yard.get_center().y))
+	for x in [-1.2, 1.2]:
+		for z in [-0.8, 0.8]:
+			add_child(Util.cylinder(0.08, 2.2, Color(0.95, 0.3, 0.2), cf + Vector3(x, 1.1, z)))
+	add_child(Util.box(Vector3(2.6, 0.12, 1.8), Color(0.2, 0.6, 0.95), cf + Vector3(0, 2.2, 0), true))
+	var slide := Util.box(Vector3(2.8, 0.08, 0.7), Color(1, 0.8, 0.1), cf + Vector3(2.4, 1.1, 0), true)
+	slide.rotation.z = -0.65
+	add_child(slide)
+	# The school: two storeys of red brick with big windows and a sign over the door
+	var build_r := Rect2(site.position.x + 3, site.position.y, site.size.x - 6, site.size.y - sc.yard - 1.0)
+	var node := _add_building(build_r, 7.5, Color(0.72, 0.36, 0.28), Vector3(0, 0, 1))
+	var sz: Vector3 = node.get_meta("size")
+	_part(node, Vector3(sz.x + 0.4, 0.4, sz.z + 0.4), Color(0.3, 0.3, 0.33), Vector3(0, sz.y + 0.2, 0))
+	_windows(node, Color(0.55, 0.78, 0.95), 2, 3.2, 1.8)
+	_part(node, Vector3(2.4, 2.6, 0.2), Color(0.15, 0.35, 0.7), Vector3(0, 1.3, sz.z / 2.0 + 0.05))
+	_part(node, Vector3(10.0, 1.1, 0.2), Color(0.12, 0.3, 0.6), Vector3(0, 5.6, sz.z / 2.0 + 0.08))
+	var sign := Util.label3d("PARKSIDE PRIMARY SCHOOL", 54, Color.WHITE, Vector3(0, 5.6, sz.z / 2.0 + 0.25))
+	sign.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	sign.no_depth_test = false
+	node.add_child(sign)
+	# Green railings along the front with the school gate in the middle
+	var rail := Color(0.12, 0.45, 0.22)
+	var fz := site.end.y - 0.2
+	var x := site.position.x
+	while x <= site.end.x:
+		if absf(x - gate.x) > 2.2:
+			add_child(Util.cylinder(0.05, 1.5, rail, Vector3(x, 0.75, fz)))
+		x += 0.5
+	for part in [[site.position.x, gate.x - 2.2], [gate.x + 2.2, site.end.x]]:
+		var w: float = part[1] - part[0]
+		add_child(Util.box(Vector3(w, 0.08, 0.08), rail, Vector3(part[0] + w / 2.0, 1.35, fz)))
+	for gx in [gate.x - 2.3, gate.x + 2.3]:
+		add_child(Util.box(Vector3(0.35, 2.2, 0.35), Color(0.75, 0.36, 0.28), Vector3(gx, 1.1, fz), true))
+	var arch := Util.label3d("SCHOOL", 40, Color(1, 0.9, 0.3), Vector3(gate.x, 2.7, fz))
+	add_child(arch)
+	# Zebra crossings where the lollipop ladies see the children across
+	for cr in sc.crossings:
+		var kerb: Vector2 = cr[0]
+		var mid: Vector2 = cr[1]
+		var across := (mid - kerb).normalized()
+		var along := Vector2(across.y, -across.x)
+		var yaw := yaw_of(_v3(across))
+		var t := -ROAD_HALF + 0.4
+		while t < ROAD_HALF:
+			var stripe := Util.box(Vector3(0.55, 0.02, 3.0), Color(0.97, 0.97, 0.97), _v3(mid + across * t, 0.075))
+			stripe.rotation.y = yaw
+			add_child(stripe)
+			t += 1.0
+		# Belisha beacons on both kerbs
+		for sgn in [-1.0, 1.0]:
+			var bp: Vector2 = mid + across * sgn * (ROAD_HALF + 1.0) + along * 2.0
+			add_child(Util.cylinder(0.07, 2.4, Color(0.95, 0.95, 0.95), _v3(bp, 1.2)))
+			add_child(Util.sphere(0.25, Util.glow(Color(1, 0.6, 0.1), 1.8), _v3(bp, 2.55)))
+	# SCHOOL warning signs at both ends of the street
+	for sx in [site.position.x - 14.0, site.end.x + 14.0]:
+		var sp := Vector3(sx, 0, -PAVE_HALF + 0.6)
+		add_child(Util.cylinder(0.06, 2.4, Color(0.6, 0.6, 0.65), sp + Vector3(0, 1.2, 0)))
+		add_child(Util.box(Vector3(1.0, 0.8, 0.06), Color(0.9, 0.12, 0.12), sp + Vector3(0, 2.6, 0), true))
+		add_child(Util.label3d("SCHOOL", 30, Color.WHITE, sp + Vector3(0, 2.6, 0.1)))
 
 
 func _line_buildings(width: Vector2, height: Vector2, depth: float, setback: float, maker: Callable) -> void:

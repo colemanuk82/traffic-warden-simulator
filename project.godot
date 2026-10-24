@@ -6,7 +6,7 @@ config_version=5
 [application]
 
 config/name="Traffic Warden Sim"
-config/version="1.2.0"
+config/version="1.3.0"
 config/icon="res://icon.png"
 run/main_scene="res://menu.tscn"
 boot_splash/bg_color=Color(0.06, 0.05, 0.12, 1)
