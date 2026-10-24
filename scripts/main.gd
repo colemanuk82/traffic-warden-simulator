@@ -1865,9 +1865,9 @@ func _bat_swing(p: Player, w) -> void:
 			_popup("WRECKED!  +%d" % pts, Color(1, 0.4, 0.15), pos, 50)
 			_shake_all(1.0)
 			# The blast knocks any drivers nearby out cold too
-			for d in get_tree().get_nodes_in_group("drivers"):
-				if d.can_be_punched() and _flat_dist(d.global_position, car.global_position) < 6.0:
-					if d.punched(car.global_position, 24.0, true):
+			for other in get_tree().get_nodes_in_group("drivers"):
+				if other.can_be_punched() and _flat_dist(other.global_position, car.global_position) < 6.0:
+					if other.punched(car.global_position, 24.0, true):
 						p.punches += 1
 						p.score += BAT_BONUS
 		else:

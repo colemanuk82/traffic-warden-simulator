@@ -41,7 +41,7 @@ on the Lord Mayor's limo. Then do it all again in the snow.
 
 ## Download and play
 
-1. Grab **TrafficWardenSim-1.2.0-setup.exe** from the [latest release](https://github.com/colemanuk82/traffic-warden-simulator/releases/latest).
+1. Grab **TrafficWardenSim-1.3.0-setup.exe** from the [latest release](https://github.com/colemanuk82/traffic-warden-simulator/releases/latest).
 2. Run it. You get a Start Menu entry, a desktop icon (if you want one) and a proper uninstaller.
 3. Sign on for your first shift.
 
@@ -55,7 +55,7 @@ then **Run anyway**. We promise it only bites drivers.
 ### On an Android phone
 
 1. On your phone, open the [latest release](https://github.com/colemanuk82/traffic-warden-simulator/releases/latest)
-   and tap **TrafficWardenSim-1.2.0.apk** to download it.
+   and tap **TrafficWardenSim-1.3.0.apk** to download it.
 2. Open the download. Android will ask to let your browser (or Files app) **install unknown apps**: allow it.
 3. Tap **Install**, then **Open**. Play Protect may say it doesn't recognise the app: tap **More details**,
    then **Install anyway**.
@@ -73,7 +73,7 @@ Android). It needs the internet for a second and keeps quiet if you're offline. 
 
 ## What's in the van
 
-- **12 streets to patrol**: leafy suburbs, a seaside prom, a neon city in the rain, posh avenues, a
+- **13 streets to patrol**: leafy suburbs, **School Patrol** (zig-zags, lollipop ladies and the school run), a seaside prom, a neon city in the rain, posh avenues, a
   supermarket car park, a multi-storey, hills so steep you'll need a sit down, plus **Spooky Hollow** for Halloween
   and **Christmas Eve** in the town square.
 - **The ticket needle**: stop it in the green for a PERFECT write. Miss and you'll be fumbling while the
@@ -85,6 +85,9 @@ Android). It needs the internet for a second and keeps quiet if you're offline. 
 - **Self defence**: drivers chase you. You can punch them. They go flying and see stars. It's that kind of game.
   Punches aim themselves at the nearest driver and you lunge in to land them. A yellow ring shows who you'd
   hit, and it turns green for a **PERFECT PUNCH** (extra points, extra knock-back, a lovely crunch).
+- **RAMPAGE MODE**: floor three drivers in a row and you get a baseball bat for 15 seconds. Your eyes glow red,
+  the screen turns red and drippy, the heavy metal kicks in, and you can knock drivers out cold and smash cars
+  until they explode.
 - **A death metal soundtrack**, growled lyrics and all ("TICKET OF DOOM!"), plus thrash, doom, groove,
   black metal, metalcore, nu-metal, hardcore punk, grunge, stoner and glam rock. Prefer the old tunes? Pick
   **Classic** in Settings, or try any track in the Jukebox.
@@ -216,7 +219,7 @@ templates, plus NSIS's `makensis` and `zip`). It exports `TrafficWardenSim.exe` 
 (audio and fonts are packed as raw files because the game loads them at runtime), then makes the portable zip
 and the installer from `installer/installer.nsi`. Output lands in `build/release/`.
 
-**Build for Android:** `tools/build_android.sh 1.2.0` makes a signed APK in `build/release/`. It needs the
+**Build for Android:** `tools/build_android.sh 1.3.0` makes a signed APK in `build/release/`. It needs the
 4.3 export templates and an Android SDK path in Godot's editor settings with `apksigner` (the Ubuntu `apksigner`
 package is enough). The signing key is never in the repo: pass it with `ANDROID_KEYSTORE`, `ANDROID_KEY_ALIAS`
 and `ANDROID_KEY_PASSWORD`, and keep using the same one, because Android only installs updates signed with it.
@@ -233,6 +236,7 @@ Unlock each level with stars (1 star = quota met, 2 and 3 stars for high scores)
 | Pleasant Street | One long straight road | Sunny suburb | 0 |
 | Market Crossroads | Plus-shaped junction | Town centre shops and market stalls | 1 |
 | Seaside Prom | L-shape up the hill | Beach, sea, pier and beach huts | 3 |
+| School Patrol | Long street with a side road | Parkside Primary, zig-zags, zebra crossings, lollipop ladies | 4 |
 | Snowy Village | U-shape round the green | Snow, cottages, Christmas tree | 6 |
 | Neon City | Grid of four roads | Night time, neon signs, street lights | 9 |
 | Posh Avenue | Zig-zag | Golden hour mansions and fountains | 12 |
